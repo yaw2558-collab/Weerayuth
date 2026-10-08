@@ -1,0 +1,12 @@
+google-adk
+fastapi
+uvicorn
+firebase-admin
+opentelemetry-api==1.42.1
+google-api-core==2.34.0
+openpyxl
+pypdf
+python-docx
+python-multipart
+stripe
+python-dotenv

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 96">
+  <!-- badge -->
+  <rect x="8" y="16" width="64" height="64" rx="16" fill="#0c4a42"/>
+  <!-- container -->
+  <rect x="20" y="30" width="26" height="18" rx="2" fill="#ffffff"/>
+  <rect x="27" y="32" width="2.5" height="14" fill="#0c4a42"/>
+  <rect x="33" y="32" width="2.5" height="14" fill="#0c4a42"/>
+  <rect x="39" y="32" width="2.5" height="14" fill="#0c4a42"/>
+  <!-- verified check -->
+  <circle cx="57" cy="58" r="11" fill="#c2410c"/>
+  <polyline points="52,58 55.5,61.5 62,53.5" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- wordmark -->
+  <text x="86" y="50" font-family="Prompt, 'Leelawadee UI', system-ui, sans-serif" font-size="22" font-weight="700" fill="#0c4a42">ที่ปรึกษาพิกัดศุลกากรไทย</text>
+  <text x="87" y="71" font-family="Prompt, system-ui, sans-serif" font-size="12" letter-spacing="2.5" fill="#6b7280">THAI CUSTOMS ASSISTANT</text>
+</svg>

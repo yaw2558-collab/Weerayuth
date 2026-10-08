@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ที่ปรึกษาพิกัดศุลกากรไทย</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#1f2933;--muted:#6b7280;--line:#e2e5e0;--bg:#eef1ec;--card:#ffffff;
+--brand:#0c4a42;--brand-ink:#ffffff;--accent:#c2410c;--accent-soft:#fdeede;}
+*{box-sizing:border-box}
+body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink);margin:0;font-size:15px;line-height:1.6}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px 24px}
+header.top{position:sticky;top:0;z-index:5;background:var(--brand);color:var(--brand-ink)}
+.top .wrap{display:flex;align-items:center;gap:12px;padding-top:12px;padding-bottom:12px}
+.brand{font-family:Prompt,system-ui,sans-serif;font-weight:600;font-size:18px;flex:1}
+.pill{font-size:13px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:4px 12px;white-space:nowrap}
+.pill b{font-variant-numeric:tabular-nums}
+button{font-family:inherit;font-size:14px;padding:9px 18px;border-radius:8px;border:1px solid var(--brand);background:var(--brand);color:#fff;cursor:pointer}
+button:hover{filter:brightness(1.1)}
+button.ghost{background:#fff;color:var(--brand)}
+button.accent{background:var(--accent);border-color:var(--accent)}
+button.small{padding:6px 12px;font-size:13px}
+input[type=text],input[type=email],input[type=password],textarea{font-family:inherit;font-size:14px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+input:focus,textarea:focus{outline:2px solid var(--brand);outline-offset:-1px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:16px}
+.card h3{font-family:Prompt,system-ui,sans-serif;font-size:16px;margin:0 0 8px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.hint{font-size:13px;color:var(--muted)}
+#banner{display:none;border-radius:8px;padding:10px 14px;margin-top:16px;font-size:14px}
+#banner.ok{display:block;background:#e7f6ec;border:1px solid #8fd0a4}
+#banner.warn{display:block;background:var(--accent-soft);border:1px solid #f0b08a}
+#consentbox{display:none;border-left:4px solid var(--accent)}
+#thread{margin-top:16px;display:flex;flex-direction:column;gap:10px;min-height:120px}
+.msg{max-width:85%;padding:10px 14px;border-radius:16px;white-space:normal;overflow-wrap:break-word}
+.msg.user{align-self:flex-end;background:var(--brand);color:#fff;border-bottom-right-radius:4px}
+.msg.ai{align-self:flex-start;background:#fff;border:1px solid var(--line);border-bottom-left-radius:4px}
+.msg.sys{align-self:center;background:transparent;border:1px dashed var(--line);color:var(--muted);font-size:13px;border-radius:8px}
+.msg p{margin:0 0 8px}.msg p:last-child{margin-bottom:0}
+.msg a{color:var(--accent)}
+.msg.user a{color:#ffd9b8}
+.msg ul{margin:4px 0 8px;padding-left:22px}
+.typing{display:inline-block}
+.typing span{display:inline-block;width:7px;height:7px;margin-right:4px;border-radius:50%;background:var(--muted);animation:blink 1.2s infinite}
+.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,60%,100%{opacity:.25}30%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.typing span{animation:none;opacity:1}}
+.composer{position:sticky;bottom:0;background:var(--bg);padding:12px 0 4px}
+.composer .box{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px}
+.composer textarea{width:100%;border:none;resize:vertical;min-height:56px;padding:4px}
+.composer textarea:focus{outline:none}
+.composer .actions{display:flex;gap:8px;align-items:center;margin-top:8px}
+.filebtn{font-size:13px;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+.filebtn:hover{border-color:var(--brand)}
+#filename{font-size:13px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pkgs{display:flex;gap:8px;flex-wrap:wrap}
+footer{margin-top:24px;font-size:13px;color:var(--muted);text-align:center}
+footer a{color:var(--brand)}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+<img src="/logo.svg" width="60" height="60" alt="โลโก้">
+<div class="brand">ที่ปรึกษาพิกัดศุลกากรไทย</div>
+<span class="pill" id="creditpill" style="display:none">เครดิต <b id="credits">0</b></span>
+<button class="ghost small" id="logoutbtn" style="display:none" onclick="logout()">ออก</button>
+</div></header>
+
+<div class="wrap">
+<div id="banner"></div>
+
+<div class="card" id="authcard">
+<h3>เข้าสู่ระบบ</h3>
+<div class="row">
+<button onclick="googleLogin()">Login ด้วย Google</button>
+</div>
+<div class="row">
+<input id="email" type="email" placeholder="อีเมล" size="22">
+<input id="pw" type="password" placeholder="รหัสผ่าน" size="16">
+<button class="ghost" onclick="emailLogin()">Login</button>
+<button class="ghost" onclick="emailRegister()">สมัคร</button>
+</div>
+<div class="hint" id="autherr"></div>
+</div>
+
+<div class="card" id="consentbox">
+<h3>ขอความยินยอม</h3>
+<div class="row">
+<label><input type="checkbox" id="consent"> ยินยอมให้บันทึกคำถาม-คำตอบเพื่อปรับปรุงบริการ</label>
+<button class="small" onclick="giveConsent()">ยืนยัน</button>
+</div>
+</div>
+
+<div class="card" id="topupcard" style="display:none">
+<h3>เติมเครดิต</h3>
+<div class="pkgs" id="pkgs"></div>
+</div>
+
+<div id="thread"></div>
+
+<div class="composer" id="composer" style="display:none"><div class="box">
+<textarea id="msg" placeholder="พิมพ์คำถาม เช่น นำเข้าลำโพงบลูทูธจากจีน เสียอากรเท่าไหร่ (Enter = ส่ง)"></textarea>
+<div class="actions">
+<label class="filebtn">แนบไฟล์<input type="file" id="file" hidden accept="image/*,.xlsx,.xls,.pdf,.docx,.csv,.txt"></label>
+<span id="filename"></span>
+<button class="accent" onclick="send()">ส่ง · 10 เครดิต</button>
+</div>
+</div></div>
+
+<footer>สนใจใช้บริการนำเข้า/ปรึกษาพิกัดเพิ่มเติม ติดต่อเรา:
+<a href="https://lin.ee/Z55Jn7C">LINE OA</a> · <a href="https://www.facebook.com/weerayuth.sangkamanee.2025">Facebook</a></footer>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script>
+firebase.initializeApp({apiKey:"AIzaSyAZVJri2odpAehv176eltZ6VZQ_hZQJHz4",authDomain:"glowing-magnet-330507.firebaseapp.com",projectId:"glowing-magnet-330507"});
+const auth=firebase.auth();let sid=null;
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function md(src){let h=esc(src);
+h=h.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+h=h.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+const lines=h.split('\n');let out='',inlist=false;
+for(const ln of lines){const m=ln.match(/^\s*[-*]\s+(.*)/);
+if(m){if(!inlist){out+='<ul>';inlist=true;}out+='<li>'+m[1]+'</li>';}
+else{if(inlist){out+='</ul>';inlist=false;}out+=ln.trim()?'<p>'+ln+'</p>':'';}}
+if(inlist)out+='</ul>';return out||'<p></p>';}
+function banner(text,kind){const b=document.getElementById('banner');b.className=kind||'';b.textContent=text||'';if(!text)b.removeAttribute('class');}
+function addMsg(who,html){const t=document.getElementById('thread');const d=document.createElement('div');d.className='msg '+who;d.innerHTML=html;t.appendChild(d);d.scrollIntoView({block:'nearest'});return d;}
+function setLoggedIn(on,email){document.getElementById('authcard').style.display=on?'none':'block';
+document.getElementById('composer').style.display=on?'block':'none';
+document.getElementById('topupcard').style.display=on?'block':'none';
+document.getElementById('creditpill').style.display=on?'inline':'none';
+document.getElementById('logoutbtn').style.display=on?'inline':'none';
+if(!on)document.getElementById('consentbox').style.display='none';}
+auth.onAuthStateChanged(u=>{setLoggedIn(!!u);if(u)loadMe();});
+async function api(path,opts={}){const t=await auth.currentUser.getIdToken();opts.headers=Object.assign({},opts.headers,{Authorization:'Bearer '+t});const r=await fetch(path,opts);if(!r.ok)throw new Error(r.status+' '+(await r.text()).slice(0,160));return r.json();}
+async function googleLogin(){autherr.textContent='';try{await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());}catch(e){autherr.textContent='ผิดพลาด: '+e.message;}}
+async function emailLogin(){autherr.textContent='';try{await auth.signInWithEmailAndPassword(email.value,pw.value);}catch(e){autherr.textContent='ผิดพลาด: '+e.message;}}
+async function emailRegister(){autherr.textContent='';try{await auth.createUserWithEmailAndPassword(email.value,pw.value);}catch(e){autherr.textContent='ผิดพลาด: '+e.message;}}
+async function logout(){await auth.signOut();}
+async function loadMe(){try{const m=await api('/me');credits.textContent=m.credits;document.getElementById('consentbox').style.display=m.consent_ts?'none':'block';loadPackages();}catch(e){banner('โหลดข้อมูลไม่สำเร็จ: '+e.message,'warn');}}
+async function giveConsent(){if(!consent.checked){banner('กรุณาติ๊กยินยอมก่อน','warn');return;}await api('/consent',{method:'POST'});banner('');loadMe();}
+async function loadPackages(){try{const d=await (await fetch('/billing/packages')).json();pkgs.innerHTML=d.packages.map(p=>`<button class="accent small" onclick="topup('${p.price_id}')">${p.label} ฿${p.thb}</button>`).join('');}catch(e){}}
+async function topup(price_id){try{const d=await api('/billing/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({price_id})});location.href=d.url;}catch(e){banner('เติมเงินไม่สำเร็จ: '+e.message,'warn');}}
+async function send(){const m=msg.value.trim();if(!m)return;addMsg('user',md(m));msg.value='';
+const wait=addMsg('ai','<span class="typing"><span></span><span></span><span></span></span>');
+try{const f=new FormData();f.append('message',m);if(sid)f.append('session_id',sid);
+if(file.files[0])f.append('file',file.files[0]);file.value='';filename.textContent='';
+const d=await api('/chat',{method:'POST',body:f});sid=d.session_id;wait.innerHTML=md(d.answer);loadMe();}
+catch(e){wait.className='msg sys';wait.textContent='ผิดพลาด: '+e.message;}}
+file.addEventListener('change',()=>{filename.textContent=file.files[0]?file.files[0].name:'';});
+msg.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
+(function(){const q=new URLSearchParams(location.search).get('topup');
+if(q==='success')banner('ชำระเงินสำเร็จ เครดิตเข้าแล้ว','ok');
+else if(q==='cancel')banner('ยกเลิกการชำระเงิน','warn');
+if(q)history.replaceState(null,'',location.pathname);})();
+</script>
+</body>
+</html>

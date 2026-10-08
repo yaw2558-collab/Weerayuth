@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>thai-customs admin</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:16px}
+table{border-collapse:collapse;width:100%;margin-top:12px}
+td,th{border:1px solid #ccc;padding:6px 10px;text-align:left}
+th{background:#f0f0f0}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+.row{display:flex;gap:8px;margin:8px 0}
+button{padding:8px 16px;cursor:pointer}
+input{padding:8px}
+#error{color:#a00}
+</style>
+</head>
+<body>
+<h2>thai-customs admin</h2>
+<div class="row">
+<input id="key" type="password" placeholder="Admin key" size="30">
+<button onclick="load()">ดูสถิติ</button>
+</div>
+<div id="error"></div>
+<table id="tbl" style="display:none">
+<tr><th>ตัวชี้วัด</th><th>ค่า</th></tr>
+</table>
+<script>
+const LABELS={users:'ผู้ใช้ทั้งหมด',credits_outstanding:'เครดิตคงเหลือรวม',payments_succeeded:'จ่ายสำเร็จ (ครั้ง)',payments_failed:'จ่ายล้มเหลว (ครั้ง)',revenue_thb:'รายรับรวม test+live (บาท)',revenue_live_thb:'รายรับจริง live (บาท)',credits_sold:'เครดิตที่ขายได้',queries:'คำถามทั้งหมด',est_cost_usd:'ต้นทุน AI โดยประมาณ (USD)',grounding_calls:'ครั้งที่ใช้ grounding'};
+async function load(){error.textContent='';try{const r=await fetch('/admin/stats',{headers:{'x-admin-key':key.value}});if(!r.ok)throw new Error(r.status+' '+await r.text());const s=await r.json();const t=document.getElementById('tbl');t.style.display='table';t.innerHTML='<tr><th>ตัวชี้วัด</th><th>ค่า</th></tr>'+Object.entries(LABELS).map(([k,th])=>`<tr><td>${th}</td><td class="num">${s[k]}</td></tr>`).join('');}catch(e){error.textContent='ผิดพลาด: '+e.message;}}
+</script>
+</body>
+</html>
