@@ -2,6 +2,11 @@
 __pycache__/
 .env
 *.pyc
+# clips project: keep scripts/notes in git, never raw video/audio
+clips/raw/*.*
+clips/edited/*.*
+clips/published/*.*
+!clips/**/.gitkeep
 # desktop installers: build outputs (built by GitHub Actions)
 desktop/*/dist/
 desktop/*/build/
