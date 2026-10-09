@@ -2,6 +2,12 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=AW-955537182"></script>
+<script>
+window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}
+gtag('js',new Date());gtag('config','AW-955537182');
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ที่ปรึกษาพิกัดศุลกากรไทย</title>
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
@@ -226,9 +232,9 @@ if(!on){document.getElementById('consentbox').style.display='none';document.getE
 showEmptyIfNeeded();}
 auth.onAuthStateChanged(u=>{setLoggedIn(!!u);if(u)loadMe();});
 async function api(path,opts={}){const t=await auth.currentUser.getIdToken();opts.headers=Object.assign({},opts.headers,{Authorization:'Bearer '+t});const r=await fetch(path,opts);if(!r.ok)throw new Error(r.status+' '+(await r.text()).slice(0,160));return r.json();}
-async function googleLogin(){autherr.textContent='';try{await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());}catch(e){autherr.textContent='ผิดพลาด: '+e.message;}}
+async function googleLogin(){autherr.textContent='';try{const r=await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());if(r.additionalUserInfo&&r.additionalUserInfo.isNewUser)gtag('event','conversion',{'send_to':'AW-955537182/h2sSCOXF4JYdEJ6u0ccD','value':1.0,'currency':'THB'});}catch(e){autherr.textContent='ผิดพลาด: '+e.message;}}
 async function emailLogin(){const e=email.value.trim();if(!e){autherr.textContent='กรุณากรอกอีเมล';return;}autherr.textContent='';try{await auth.signInWithEmailAndPassword(e,pw.value);}catch(err){autherr.textContent='ผิดพลาด: '+err.message;}}
-async function emailRegister(){const e=email.value.trim();if(!e){autherr.textContent='กรุณากรอกอีเมล';return;}autherr.textContent='';try{await auth.createUserWithEmailAndPassword(e,pw.value);}catch(err){autherr.textContent='ผิดพลาด: '+err.message;}}
+async function emailRegister(){const e=email.value.trim();if(!e){autherr.textContent='กรุณากรอกอีเมล';return;}autherr.textContent='';try{await auth.createUserWithEmailAndPassword(e,pw.value);gtag('event','conversion',{'send_to':'AW-955537182/h2sSCOXF4JYdEJ6u0ccD','value':1.0,'currency':'THB'});}catch(err){autherr.textContent='ผิดพลาด: '+err.message;}}
 async function logout(){await auth.signOut();}
 async function loadMe(){try{const m=await api('/me');credits.textContent=m.credits;document.getElementById('useremail').textContent=m.email||'';document.getElementById('consentbox').style.display=m.consent_ts?'none':'block';loadPackages();}catch(e){banner('โหลดข้อมูลไม่สำเร็จ: '+e.message,'warn');}}
 async function giveConsent(){if(!consent.checked){banner('กรุณาติ๊กยินยอมก่อน','warn');return;}await api('/consent',{method:'POST'});banner('');loadMe();}
@@ -249,8 +255,8 @@ busy=false;sendbtn.disabled=false;}
 file.addEventListener('change',()=>{filename.textContent=file.files[0]?file.files[0].name:'';});
 msg.addEventListener('input',updateCount);
 msg.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
-(function(){const q=new URLSearchParams(location.search).get('topup');
-if(q==='success')banner('ชำระเงินสำเร็จ เครดิตเข้าแล้ว','ok');
+(function(){const p=new URLSearchParams(location.search);const q=p.get('topup');
+if(q==='success'){banner('ชำระเงินสำเร็จ เครดิตเข้าแล้ว','ok');const v=parseFloat(p.get('thb'));gtag('event','conversion',{'send_to':'AW-955537182/nLmRCITz35YdEJ6u0ccD','value':isNaN(v)?1.0:v,'currency':'THB'});}
 else if(q==='cancel')banner('ยกเลิกการชำระเงิน','warn');
 if(q)history.replaceState(null,'',location.pathname);})();
 </script>

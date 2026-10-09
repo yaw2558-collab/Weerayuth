@@ -93,6 +93,8 @@ def test_checkout_creates_session(monkeypatch):
   assert calls["metadata"]["uid"] == "user1"
   assert calls["metadata"]["credits"] == main.STRIPE_PRICES[pid]["credits"]
   assert calls["line_items"] == [{"price": pid, "quantity": 1}]
+  thb = main.STRIPE_PRICES[pid]["thb"]
+  assert calls["success_url"].endswith(f"?topup=success&thb={thb}")
 
 
 def test_webhook_rejects_bad_signature(monkeypatch):

@@ -308,7 +308,7 @@ def checkout(body: CheckoutIn, authorization: str | None = Header(default=None))
       mode="payment",
       line_items=[{"price": body.price_id, "quantity": 1}],
       metadata={"uid": uid, "credits": info["credits"], "price_id": body.price_id},
-      success_url=f"{APP_URL}/?topup=success",
+      success_url=f"{APP_URL}/?topup=success&thb={info['thb']}",
       cancel_url=f"{APP_URL}/?topup=cancel",
     )
   except Exception as e:
