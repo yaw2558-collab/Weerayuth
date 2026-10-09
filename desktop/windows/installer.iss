@@ -13,15 +13,15 @@
 #define AppVersion "1.0.0"
 #endif
 #define AppURL "https://gateway-1008099094873.asia-southeast1.run.app"
-#define AppNameThai "Boy Fans"
+#define AppName "ThaiCustoms"
 
 [Setup]
 AppId={{8C4A2B1E-6F3D-4A9C-9E5B-2D7C1A0F4E63}
-AppName={#AppNameThai}
+AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher=ThaiCustoms
 DefaultDirName={localappdata}\ThaiCustoms
-DefaultGroupName={#AppNameThai}
+DefaultGroupName={#AppName}
 PrivilegesRequired=lowest
 OutputDir=dist
 OutputBaseFilename=ThaiCustoms-Setup-{#AppVersion}-win64
@@ -30,6 +30,8 @@ SolidCompression=yes
 SetupIconFile=..\assets\logo.ico
 WizardStyle=modern
 DisableProgramGroupPage=yes
+; Upgrades must follow renames instead of reusing the previous group name.
+UsePreviousGroup=no
 
 [Tasks]
 Name: desktopicon; Description: "Create desktop icon"; GroupDescription: "Additional icons:"; Flags: checkedonce
@@ -38,8 +40,8 @@ Name: desktopicon; Description: "Create desktop icon"; GroupDescription: "Additi
 Source: "..\assets\logo.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#AppNameThai}"; Filename: "{#AppURL}"; IconFilename: "{app}\logo.ico"
-Name: "{autodesktop}\{#AppNameThai}"; Filename: "{#AppURL}"; IconFilename: "{app}\logo.ico"; Tasks: desktopicon
+Name: "{group}\{#AppName}"; Filename: "{#AppURL}"; IconFilename: "{app}\logo.ico"
+Name: "{autodesktop}\{#AppName}"; Filename: "{#AppURL}"; IconFilename: "{app}\logo.ico"; Tasks: desktopicon
 
 [Run]
-Filename: "{#AppURL}"; Description: "Open {#AppNameThai} now"; Flags: postinstall shellexec skipifsilent
+Filename: "{#AppURL}"; Description: "Open {#AppName} now"; Flags: postinstall shellexec skipifsilent

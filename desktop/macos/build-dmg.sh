@@ -12,7 +12,7 @@ set -euo pipefail
 
 VERSION="${1:-1.0.0}"
 APP_URL="https://gateway-1008099094873.asia-southeast1.run.app"
-APP_NAME="Boy Fans"
+APP_NAME="ThaiCustoms"
 EXEC_NAME="ThaiCustoms"
 BUNDLE_ID="com.thaicustoms.webapp"
 

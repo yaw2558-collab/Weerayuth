@@ -23,7 +23,21 @@ permissions:
   contents: write
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Consistency tests
+        shell: bash
+        run: |
+          python3 -m pytest --version -q 2>/dev/null || pip install -q pytest
+          python3 -m pytest desktop/test_desktop.py -q
+      - name: Shell syntax
+        shell: bash
+        run: bash -n desktop/macos/build-dmg.sh
+
   windows:
+    needs: check
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,6 +59,7 @@ jobs:
           path: desktop/windows/dist/*.exe
 
   macos:
+    needs: check
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
