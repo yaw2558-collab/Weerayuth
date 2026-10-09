@@ -2,7 +2,6 @@ from functools import cached_property
 
 from google.adk.agents import LlmAgent
 from google.adk.models import Gemini
-from google.adk.tools import agent_tool
 from google.adk.tools import url_context
 from google.adk.tools.google_search_tool import GoogleSearchTool
 from google.genai import Client
@@ -23,28 +22,14 @@ class GlobalGemini(Gemini):
     return Client(vertexai=True, location="global")
 
 
-_MODEL = 'gemini-2.5-pro'
+# Fast model for the single-agent path: one model call chain (search + read +
+# answer in one context) instead of 3 chained pro agents. Keeps grounding
+# tools so answers stay cited; latency drops ~3-5x per token + no hop overhead.
+_MODEL = 'gemini-2.5-flash'
 
 
 # Retry transient 429/5xx from Vertex (preview models have small quotas).
 _RETRY_OPTIONS = types.HttpRetryOptions(initial_delay=2, attempts=5)
-
-
-google_search_agent = LlmAgent(
-  name='google_search_agent',
-  model=GlobalGemini(model=_MODEL, retry_options=_RETRY_OPTIONS),
-  description='Agent specialized in performing Google searches.',
-  instruction='Use the GoogleSearchTool to find information on the web.',
-  tools=[GoogleSearchTool()],
-)
-
-url_context_agent = LlmAgent(
-  name='url_context_agent',
-  model=GlobalGemini(model=_MODEL, retry_options=_RETRY_OPTIONS),
-  description='Agent specialized in fetching content from URLs.',
-  instruction='Use the UrlContextTool to retrieve content from provided URLs.',
-  tools=[url_context],
-)
 
 root_agent = LlmAgent(
   name='thai_customs_agent',
@@ -85,7 +70,7 @@ root_agent = LlmAgent(
     '- ตอบภาษาไทยเป็นหลัก ใช้ศัพท์อังกฤษกำกับในวงเล็บเมื่อจำเป็น\n'
   ),
   tools=[
-    agent_tool.AgentTool(agent=google_search_agent),
-    agent_tool.AgentTool(agent=url_context_agent),
+    GoogleSearchTool(),
+    url_context,
   ],
 )

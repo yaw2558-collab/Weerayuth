@@ -28,11 +28,16 @@ def _sign(payload: bytes, secret: str = WEBHOOK_SECRET) -> str:
   return f"t={t},v1={sig}"
 
 
-def _completed_event(session_id="cs_test_123", paid=True, credits="100"):
+def _completed_event(
+  session_id="cs_test_123",
+  paid=True,
+  credits="100",
+  etype="checkout.session.completed",
+):
   return {
     "id": "evt_test_1",
     "object": "event",
-    "type": "checkout.session.completed",
+    "type": etype,
     "data": {
       "object": {
         "id": session_id,
@@ -162,6 +167,76 @@ def test_webhook_unpaid_records_failed(monkeypatch):
   )
   assert r.status_code == 200
   assert grants == []
+  assert payments[0][1]["status"] == "failed"
+
+
+def test_checkout_offers_promptpay(monkeypatch):
+  monkeypatch.setattr(main, "_verify", lambda auth: {"uid": "user1"})
+  monkeypatch.setattr(main, "STRIPE_SECRET_KEY", "sk_test_fake")
+  calls = {}
+
+  class FakeSession:
+    url = "https://checkout.stripe.com/pay/cs_test"
+
+  def fake_create(**kw):
+    calls.update(kw)
+    return FakeSession()
+
+  monkeypatch.setattr("stripe.checkout.Session.create", fake_create)
+  pid = next(iter(main.STRIPE_PRICES))
+  r = client.post(
+    "/billing/checkout",
+    json={"price_id": pid},
+    headers={"Authorization": "Bearer [REDACTED]"},
+  )
+  assert r.status_code == 200
+  assert calls["payment_method_types"] == ["card", "promptpay"]
+
+
+def test_webhook_async_payment_succeeded_grants(monkeypatch):
+  monkeypatch.setattr(main, "STRIPE_WEBHOOK_SECRET", WEBHOOK_SECRET)
+  monkeypatch.setattr(main, "_payment_exists", lambda sid: False)
+  grants, payments = [], []
+  monkeypatch.setattr(
+    main,
+    "_grant_credits",
+    lambda uid, credits, reason: grants.append((uid, credits, reason)) or 130,
+  )
+  monkeypatch.setattr(main, "_record_payment", lambda sid, d: payments.append((sid, d)))
+
+  payload = json.dumps(
+    _completed_event(
+      session_id="cs_promptpay_1", etype="checkout.session.async_payment_succeeded"
+    )
+  ).encode()
+  r = client.post(
+    "/billing/webhook", content=payload, headers={"stripe-signature": _sign(payload)}
+  )
+  assert r.status_code == 200
+  assert grants == [("user1", 100, "topup:stripe:cs_promptpay_1")]
+  assert payments[0][1]["status"] == "succeeded"
+
+
+def test_webhook_async_payment_failed_records_failed(monkeypatch):
+  monkeypatch.setattr(main, "STRIPE_WEBHOOK_SECRET", WEBHOOK_SECRET)
+  monkeypatch.setattr(main, "_payment_exists", lambda sid: False)
+  grants, payments = [], []
+  monkeypatch.setattr(main, "_grant_credits", lambda *a: grants.append(a) or 0)
+  monkeypatch.setattr(main, "_record_payment", lambda sid, d: payments.append((sid, d)))
+
+  payload = json.dumps(
+    _completed_event(
+      session_id="cs_promptpay_2",
+      paid=False,
+      etype="checkout.session.async_payment_failed",
+    )
+  ).encode()
+  r = client.post(
+    "/billing/webhook", content=payload, headers={"stripe-signature": _sign(payload)}
+  )
+  assert r.status_code == 200
+  assert grants == []
+  assert payments[0][0] == "cs_promptpay_2"
   assert payments[0][1]["status"] == "failed"
 
 

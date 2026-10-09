@@ -45,3 +45,15 @@ def test_purchase_conversion_reads_thb_param():
   html = _index_html()
   assert "AW-955537182/nLmRCITz35YdEJ6u0ccD" in html
   assert "p.get('thb')" in html
+
+
+def test_chat_uses_sse_streaming():
+  html = _index_html()
+  assert "Accept:'text/event-stream'" in html
+  assert "getReader" in html
+  assert "event:done" not in html  # events parsed, not hardcoded
+
+
+def test_promptpay_mentioned():
+  html = _index_html()
+  assert html.count("PromptPay") >= 2  # topup sub + how-to steps

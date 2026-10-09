@@ -166,7 +166,7 @@ body:not(.in) .side-col{order:-1}
 </div>
 
 <div class="card" id="topupcard" style="display:none">
-<h3>เติมเครดิต<span class="sub">1 เครดิต = 1 บาท · ถามครั้งละ 10 เครดิต</span></h3>
+<h3>เติมเครดิต<span class="sub">1 เครดิต = 1 บาท · ถามครั้งละ 10 เครดิต · จ่ายด้วยบัตรหรือ PromptPay</span></h3>
 <div class="pkgs" id="pkgs"></div>
 </div>
 
@@ -175,7 +175,7 @@ body:not(.in) .side-col{order:-1}
 <ol class="steps">
 <li>เข้าสู่ระบบ รับเครดิตทดลอง 30 เครดิต</li>
 <li>พิมพ์คำถาม แนบรูปหรือไฟล์ได้ (สูงสุด 20MB)</li>
-<li>เครดิตหมดกดเติมได้ทันที จ่ายผ่าน Stripe</li>
+<li>เครดิตหมดกดเติมได้ทันที จ่ายผ่าน Stripe (บัตร/PromptPay)</li>
 </ol>
 </div>
 </aside>
@@ -245,10 +245,28 @@ async function topup(price_id){try{const d=await api('/billing/checkout',{method
 async function send(){if(busy)return;const m=msg.value.trim();if(!m)return;busy=true;sendbtn.disabled=true;
 addMsg('user',md(m));msg.value='';updateCount();
 const wait=addMsg('ai','<span class="typing"><span></span><span></span><span></span></span>');
+const bodyEl=wait.querySelector('.body');
 try{const f=new FormData();f.append('message',m);if(sid)f.append('session_id',sid);
 if(file.files[0])f.append('file',file.files[0]);file.value='';filename.textContent='';
-const d=await api('/chat',{method:'POST',body:f});sid=d.session_id;
-wait.querySelector('.body').innerHTML=md(d.answer);
+const t=await auth.currentUser.getIdToken();
+const r=await fetch('/chat',{method:'POST',headers:{Authorization:'Bearer '+t,Accept:'text/event-stream'},body:f});
+if(!r.ok)throw new Error(r.status+' '+(await r.text()).slice(0,160));
+const ct=r.headers.get('content-type')||'';
+if(ct.includes('application/json')){const d=await r.json();sid=d.session_id;bodyEl.innerHTML=md(d.answer);}
+else{let buf='',acc='',ev='',data='',final=null;
+const dispatch=()=>{if(!ev)return;let d=null;try{d=JSON.parse(data);}catch(e){}const e2=ev;ev='';data='';
+if(e2==='token'&&d){acc+=d.text||'';bodyEl.innerHTML=md(acc);}else if(e2==='done'&&d){final=d;}
+else if(e2==='stage'&&d&&!acc){bodyEl.innerHTML='<p class="hint">'+esc(d.text)+'</p><span class="typing"><span></span><span></span><span></span></span>';}
+else if(e2==='error'){throw new Error((d&&d.error)||'stream error');}};
+const rd=r.body.getReader();const dec=new TextDecoder();
+for(;;){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});
+let i;while((i=buf.indexOf('\n'))>=0){let line=buf.slice(0,i);buf=buf.slice(i+1);
+if(line.endsWith('\r'))line=line.slice(0,-1);
+if(line===''){dispatch();continue;}
+if(line.startsWith('event:'))ev=line.slice(6).trim();
+else if(line.startsWith('data:'))data+=line.slice(5).trim();}}
+dispatch();if(!final)throw new Error('การเชื่อมต่อขาดหาย');
+sid=final.session_id;bodyEl.innerHTML=md(final.answer);}
 wait.querySelector('.meta').innerHTML=now()+metaRow('ai');loadMe();}
 catch(e){wait.className='msg sys';wait.textContent='ผิดพลาด: '+e.message;}
 busy=false;sendbtn.disabled=false;}

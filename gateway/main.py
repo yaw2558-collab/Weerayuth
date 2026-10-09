@@ -6,12 +6,16 @@
 - Consent required before first chat (POST /consent)
 - File attachments: images (vision) + xlsx/pdf/docx/csv/txt (text extract)
 - Stripe top-up: GET /billing/packages, POST /billing/checkout, POST /billing/webhook
+  (card + PromptPay; webhook also handles async payment events)
+- POST /chat streams SSE when Accept: text/event-stream, else returns JSON
+- Text-only answers are cached in answer_cache (30d TTL) for instant repeats
 - Serves minimal chat frontend at /
 
 Run locally from thai-customs/ (reads gateway/.env if present):
     ..\\.venv\\Scripts\\uvicorn gateway.main:app --port 8001
 """
 
+import hashlib
 import io
 import json
 import os
@@ -20,7 +24,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from dotenv import load_dotenv
@@ -33,6 +37,7 @@ from firebase_admin import firestore
 
 import stripe
 
+from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types as genai_types
@@ -61,6 +66,8 @@ NEW_USER_BONUS = 30  # 3 free trial queries
 RATE_LIMIT_S = 20
 MAX_FILE_MB = 20
 MAX_TEXT_CHARS = 100_000
+CACHE_VERSION = "v1"  # bump to invalidate answer_cache (e.g. model change)
+CACHE_TTL_S = 30 * 24 * 3600  # cached answers stay servable for 30 days
 
 FOOTER = (
   "\n\n---\nสนใจใช้บริการนำเข้า/ปรึกษาพิกัดเพิ่มเติม ติดต่อเรา: "
@@ -77,6 +84,8 @@ firebase_admin.initialize_app(options={"projectId": PROJECT})
 db = firestore.client()
 session_service = InMemorySessionService()
 runner = Runner(agent=root_agent, app_name=APP_NAME, session_service=session_service)
+# SSE mode yields partial text chunks (typewriter) + final aggregated events.
+_STREAM_CONFIG = RunConfig(streaming_mode=StreamingMode.SSE)
 
 app = FastAPI(title="thai-customs gateway")
 _last_call: dict[str, float] = {}
@@ -311,6 +320,7 @@ def checkout(body: CheckoutIn, authorization: str | None = Header(default=None))
   try:
     session = stripe.checkout.Session.create(
       mode="payment",
+      payment_method_types=["card", "promptpay"],
       line_items=[{"price": body.price_id, "quantity": 1}],
       metadata={"uid": uid, "credits": info["credits"], "price_id": body.price_id},
       success_url=f"{APP_URL}/?topup=success&thb={info['thb']}",
@@ -374,9 +384,194 @@ async def billing_webhook(request: Request):
     event = stripe.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
   except Exception:
     raise HTTPException(400, "bad signature")
-  if event["type"] == "checkout.session.completed":
+  # PromptPay pays asynchronously: succeeded arrives via async_payment_succeeded,
+  # failed via async_payment_failed (payment_status != paid -> recorded failed).
+  if event["type"] in (
+    "checkout.session.completed",
+    "checkout.session.async_payment_succeeded",
+    "checkout.session.async_payment_failed",
+  ):
     _handle_completed_session(event["data"]["object"])
   return {"received": True}
+
+
+def _normalize_question(text: str) -> str:
+  return " ".join(text.strip().lower().split())
+
+
+def _cache_key(normalized: str) -> str:
+  raw = f"{CACHE_VERSION}:{normalized}".encode("utf-8")
+  return hashlib.sha256(raw).hexdigest()
+
+
+def _cache_get(key: str) -> dict | None:
+  """Return cached {"answer", "usage"} if fresh, else None. Fails open."""
+  try:
+    snap = db.collection("answer_cache").document(key).get()
+  except Exception:
+    return None
+  if not snap.exists:
+    return None
+  data = snap.to_dict() or {}
+  if not data.get("answer"):
+    return None
+  if time.time() - data.get("ts", 0) > CACHE_TTL_S:
+    return None
+  return data
+
+
+def _cache_put(key: str, answer: str, usage: dict) -> None:
+  try:
+    db.collection("answer_cache").document(key).set(
+      {"answer": answer, "usage": usage, "ts": time.time()}
+    )
+  except Exception:
+    pass
+
+
+def _accumulate_usage(event, acc: dict) -> None:
+  um = getattr(event, "usage_metadata", None)
+  if um is not None:
+    acc["prompt"] += getattr(um, "prompt_token_count", 0) or 0
+    acc["cand"] += getattr(um, "candidates_token_count", 0) or 0
+    acc["think"] += getattr(um, "thoughts_token_count", 0) or 0
+  if getattr(event, "grounding_metadata", None) is not None:
+    acc["grounding"] += 1
+
+
+def _event_texts(event) -> list[str]:
+  out: list[str] = []
+  content = getattr(event, "content", None)
+  if content is not None:
+    for part in getattr(content, "parts", []) or []:
+      if getattr(part, "text", None):
+        out.append(part.text)
+  return out
+
+
+def _usage_dict(acc: dict, latency: float) -> dict:
+  est_cost = (
+    acc["prompt"] / 1e6 * IN_PER_1M
+    + (acc["cand"] + acc["think"]) / 1e6 * OUT_PER_1M
+    + acc["grounding"] / 1000 * GROUND_PER_1K
+  )
+  return {
+    "prompt_tokens": acc["prompt"],
+    "candidates_tokens": acc["cand"],
+    "thoughts_tokens": acc["think"],
+    "grounding_calls": acc["grounding"],
+    "latency_s": round(latency, 1),
+    "est_cost_usd": round(est_cost, 4),
+  }
+
+
+def _charge_and_log(uid, sid, message, answer, usage, attachment, cached=False):
+  """Deduct flat-rate credits + write ledger/usage rows. Returns balance/None."""
+  usage_ref = db.collection("usage_logs").document()
+  ledger_ref = db.collection("credits_ledger").document()
+
+  @firestore.transactional
+  def _txn(txn):
+    ref = _user_ref(uid)
+    snap = ref.get(transaction=txn)
+    bal = (snap.to_dict() or {}).get("credits", 0)
+    if bal < CREDITS_PER_QUERY:
+      return None
+    txn.update(ref, {"credits": bal - CREDITS_PER_QUERY})
+    txn.set(
+      ledger_ref,
+      {
+        "user_id": uid,
+        "ts": firestore.SERVER_TIMESTAMP,
+        "delta": -CREDITS_PER_QUERY,
+        "reason": f"chat:{usage_ref.id}",
+      },
+    )
+    txn.set(
+      usage_ref,
+      {
+        "user_id": uid,
+        "ts": firestore.SERVER_TIMESTAMP,
+        "session_id": sid,
+        "question": message,
+        "answer_chars": len(answer),
+        "prompt_tokens": usage["prompt_tokens"],
+        "candidates_tokens": usage["candidates_tokens"],
+        "thoughts_tokens": usage["thoughts_tokens"],
+        "grounding_calls": usage["grounding_calls"],
+        "latency_s": usage["latency_s"],
+        "est_cost_usd": usage["est_cost_usd"],
+        "cached": cached,
+        "attachment": attachment,
+      },
+    )
+    return bal - CREDITS_PER_QUERY
+
+  return _txn(db.transaction())
+
+
+def _sse(payload_event: str, payload: dict) -> str:
+  return f"event: {payload_event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+async def _chat_once_payload(uid, sid, msg, cache_key):
+  """Run the agent to completion; returns (raw_answer, usage)."""
+  t0 = time.time()
+  acc = {"prompt": 0, "cand": 0, "think": 0, "grounding": 0}
+  texts: list[str] = []
+  async for event in runner.run_async(
+    user_id=uid, session_id=sid, new_message=msg, run_config=_STREAM_CONFIG
+  ):
+    _accumulate_usage(event, acc)
+    if not getattr(event, "partial", False):
+      texts.extend(_event_texts(event))
+  latency = time.time() - t0
+  answer = "".join(texts)
+  usage = _usage_dict(acc, latency)
+  if cache_key:
+    _cache_put(cache_key, answer, usage)
+  return answer, usage
+
+
+async def _chat_sse_gen(uid, sid, message, msg, attachment, cache_key):
+  # Immediate sign of life: the model searches official sources before
+  # the first token arrives, so tell the client what is happening.
+  yield _sse("stage", {"text": "กำลังค้นข้อมูลจากแหล่งทางการ…"})
+  t0 = time.time()
+  acc = {"prompt": 0, "cand": 0, "think": 0, "grounding": 0}
+  texts: list[str] = []
+  try:
+    async for event in runner.run_async(
+      user_id=uid, session_id=sid, new_message=msg, run_config=_STREAM_CONFIG
+    ):
+      _accumulate_usage(event, acc)
+      for text in _event_texts(event):
+        if getattr(event, "partial", False):
+          yield _sse("token", {"text": text})
+        else:
+          texts.append(text)
+  except Exception as e:
+    yield _sse("error", {"error": str(e)[:200]})
+    return
+  latency = time.time() - t0
+  answer = "".join(texts)
+  usage = _usage_dict(acc, latency)
+  if cache_key:
+    _cache_put(cache_key, answer, usage)
+  full = answer + FOOTER
+  remaining = _charge_and_log(uid, sid, message, full, usage, attachment)
+  if remaining is None:
+    yield _sse("error", {"error": "insufficient_credits"})
+    return
+  yield _sse(
+    "done",
+    {
+      "answer": full,
+      "session_id": sid,
+      "credits_left": remaining,
+      "usage": usage,
+    },
+  )
 
 
 @app.post("/chat")
@@ -385,6 +580,7 @@ async def chat(
   session_id: str | None = Form(default=None),
   file: UploadFile | None = File(default=None),
   authorization: str | None = Header(default=None),
+  accept: str | None = Header(default=None),
 ):
   claims = _verify(authorization)
   uid = claims["uid"]
@@ -435,84 +631,58 @@ async def chat(
     )
 
   msg = genai_types.Content(role="user", parts=parts)
-  t0 = time.time()
-  texts: list[str] = []
-  prompt_tok = cand_tok = think_tok = grounding = 0
-  async for event in runner.run_async(user_id=uid, session_id=sid, new_message=msg):
-    um = getattr(event, "usage_metadata", None)
-    if um is not None:
-      prompt_tok += getattr(um, "prompt_token_count", 0) or 0
-      cand_tok += getattr(um, "candidates_token_count", 0) or 0
-      think_tok += getattr(um, "thoughts_token_count", 0) or 0
-    if getattr(event, "grounding_metadata", None) is not None:
-      grounding += 1
-    content = getattr(event, "content", None)
-    if content is not None and not getattr(event, "partial", False):
-      for part in getattr(content, "parts", []) or []:
-        if getattr(part, "text", None):
-          texts.append(part.text)
+  wants_sse = bool(accept and "text/event-stream" in accept)
 
-  latency = time.time() - t0
-  answer = "".join(texts) + FOOTER
-  est_cost = (
-    prompt_tok / 1e6 * IN_PER_1M
-    + (cand_tok + think_tok) / 1e6 * OUT_PER_1M
-    + grounding / 1000 * GROUND_PER_1K
-  )
-
-  usage_ref = db.collection("usage_logs").document()
-  ledger_ref = db.collection("credits_ledger").document()
-
-  @firestore.transactional
-  def _txn(txn):
-    ref = _user_ref(uid)
-    snap = ref.get(transaction=txn)
-    bal = (snap.to_dict() or {}).get("credits", 0)
-    if bal < CREDITS_PER_QUERY:
-      return None
-    txn.update(ref, {"credits": bal - CREDITS_PER_QUERY})
-    txn.set(
-      ledger_ref,
-      {
-        "user_id": uid,
-        "ts": firestore.SERVER_TIMESTAMP,
-        "delta": -CREDITS_PER_QUERY,
-        "reason": f"chat:{usage_ref.id}",
-      },
-    )
-    txn.set(
-      usage_ref,
-      {
-        "user_id": uid,
-        "ts": firestore.SERVER_TIMESTAMP,
+  # Instant path: text-only repeats are served from cache (still charged).
+  cache_key = _cache_key(_normalize_question(text)) if attachment is None else None
+  if cache_key:
+    hit = _cache_get(cache_key)
+    if hit is not None:
+      full = hit["answer"] + FOOTER
+      usage = {
+        "prompt_tokens": 0,
+        "candidates_tokens": 0,
+        "thoughts_tokens": 0,
+        "grounding_calls": 0,
+        "latency_s": 0.0,
+        "est_cost_usd": 0.0,
+        "cached": True,
+      }
+      remaining = _charge_and_log(
+        uid, sid, message, full, usage, attachment, cached=True
+      )
+      if remaining is None:
+        raise HTTPException(402, "insufficient_credits")
+      payload = {
+        "answer": full,
         "session_id": sid,
-        "question": message,
-        "answer_chars": len(answer),
-        "prompt_tokens": prompt_tok,
-        "candidates_tokens": cand_tok,
-        "thoughts_tokens": think_tok,
-        "grounding_calls": grounding,
-        "latency_s": round(latency, 1),
-        "est_cost_usd": round(est_cost, 4),
-        "attachment": attachment,
-      },
-    )
-    return bal - CREDITS_PER_QUERY
+        "credits_left": remaining,
+        "usage": usage,
+      }
+      if wants_sse:
 
-  remaining = _txn(db.transaction())
+        async def _done_only():
+          yield _sse("done", payload)
+
+        return StreamingResponse(_done_only(), media_type="text/event-stream")
+      return payload
+
+  if wants_sse:
+    return StreamingResponse(
+      _chat_sse_gen(uid, sid, message, msg, attachment, cache_key),
+      media_type="text/event-stream",
+      headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+  raw, usage = await _chat_once_payload(uid, sid, msg, cache_key)
+  full = raw + FOOTER
+  remaining = _charge_and_log(uid, sid, message, full, usage, attachment)
   if remaining is None:
     raise HTTPException(402, "insufficient_credits")
 
   return {
-    "answer": answer,
+    "answer": full,
     "session_id": sid,
     "credits_left": remaining,
-    "usage": {
-      "prompt_tokens": prompt_tok,
-      "candidates_tokens": cand_tok,
-      "thoughts_tokens": think_tok,
-      "grounding_calls": grounding,
-      "latency_s": round(latency, 1),
-      "est_cost_usd": round(est_cost, 4),
-    },
+    "usage": usage,
   }
