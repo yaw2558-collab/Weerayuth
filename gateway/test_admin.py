@@ -20,6 +20,7 @@ FAKE = {
   "usage_logs": [
     {"est_cost_usd": 0.05, "grounding_calls": 2},
     {"est_cost_usd": 0.03, "grounding_calls": 0},
+    {"est_cost_usd": 9.99, "grounding_calls": 99, "user_id": "measure-1-x"},
   ],
 }
 

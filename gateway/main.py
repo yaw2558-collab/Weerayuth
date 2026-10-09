@@ -254,7 +254,12 @@ def stats(x_admin_key: str = Header(default="")):
     raise HTTPException(403, "bad admin key")
   users = _collection_docs("users")
   payments = _collection_docs("payments")
-  usage = _collection_docs("usage_logs")
+  # Exclude P0 cost-measurement probes (user_id "measure-*") from prod stats.
+  usage = [
+    u
+    for u in _collection_docs("usage_logs")
+    if not str(u.get("user_id", "")).startswith("measure-")
+  ]
   ok = [p for p in payments if p.get("status") == "succeeded"]
   live = [p for p in ok if p.get("livemode")]
   return {
