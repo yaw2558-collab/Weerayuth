@@ -16,3 +16,9 @@ def test_lang_toggle_present():
   js = (SITE_INDEX.parent / "script.js").read_text(encoding="utf-8")
   assert "tc-lang" in js  # localStorage persistence key
   assert "Frequently asked questions" in js  # EN strings embedded
+
+
+def test_chinese_present():
+  js = (SITE_INDEX.parent / "script.js").read_text(encoding="utf-8")
+  assert "常见问题" in js  # ZH strings embedded
+  assert "nextLang" in js  # 3-way toggle

@@ -75,3 +75,9 @@ def test_lang_toggle_present():
   assert "data-i18n=" in html
   assert "tc-lang" in html  # localStorage persistence key
   assert "Thai Customs Adviser" in html  # EN strings embedded
+
+
+def test_chinese_present():
+  html = _index_html()
+  assert "泰国海关顾问" in html  # ZH strings embedded
+  assert "nextLang" in html  # 3-way toggle

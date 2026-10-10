@@ -195,18 +195,21 @@ firebase.initializeApp({apiKey:"AIzaSyAZVJri2odpAehv176eltZ6VZQ_hZQJHz4",authDom
 const auth=firebase.auth();let sid=null;let busy=false;let loggedIn=false;
 const EN={_title:'Thai Customs Adviser',brand_t:'Thai Customs Adviser',brand_s:'Ask AI about HS codes, duty & FTA',logout:'Log out',credits:'Credits',empty_t:'Ask away',empty_hint:'Pick an example below, or type your own question',chip1:'How much duty to import Bluetooth speakers from China?',chip2:'What is the HS code for roasted coffee beans?',chip3:'What FTA benefits apply to sneakers imported from Vietnam?',msg_ph:'Type your question, e.g. duty on Bluetooth speakers from China (Enter = send, Shift+Enter = new line)',attach:'Attach file',send:'Send · 10 credits',auth_t:'Log in',auth_sub:'To ask questions and top up',google_btn:'Log in with Google',divider:'or',email_ph:'Email',pw_ph:'Password',login_btn:'Log in',reg_btn:'Sign up',consent_t:'Data consent',consent_d:'Allow logging Q&A to improve the service (required before asking)',consent_yes:'I consent',consent_ok:'Confirm',topup_t:'Top up',topup_sub:'1 credit = ฿1 · 10 credits per question · Pay by card or PromptPay',help_t:'How to use',help1:'Log in and get 30 trial credits',help2:'Type your question; attach photos or files (up to 20MB)',help3:'Top up anytime via Stripe (card/PromptPay)',footer_lead:'For import services or HS advice, contact us:',logo:'Logo',close:'Close',copy:'Copy',copied:'Copied',copy_fail:'Copy failed',chars:'chars',err:'Error: ',need_email:'Please enter your email',me_fail:'Failed to load account: ',need_consent:'Please tick consent first',topup_btn:'Top up',topup_fail:'Top-up failed: ',conn_lost:'Connection lost',topup_ok:'Payment successful — credits added',topup_cancel:'Payment cancelled'};
 const THD={close:'ปิด',copy:'คัดลอก',copied:'คัดลอกแล้ว',copy_fail:'คัดลอกไม่ได้',chars:'ตัวอักษร',err:'ผิดพลาด: ',need_email:'กรุณากรอกอีเมล',me_fail:'โหลดข้อมูลไม่สำเร็จ: ',need_consent:'กรุณาติ๊กยินยอมก่อน',topup_btn:'เติมเงิน',topup_fail:'เติมเงินไม่สำเร็จ: ',conn_lost:'การเชื่อมต่อขาดหาย',topup_ok:'ชำระเงินสำเร็จ เครดิตเข้าแล้ว',topup_cancel:'ยกเลิกการชำระเงิน'};
+const ZH={_title:'泰国海关顾问',brand_t:'泰国海关顾问',brand_s:'用AI咨询HS编码、关税和FTA',logout:'退出',credits:'积分',empty_t:'开始提问吧',empty_hint:'例如选择下方示例，或输入您自己的问题',chip1:'从中国进口蓝牙音箱要交多少关税？',chip2:'烘焙咖啡豆的HS编码是什么？',chip3:'从越南进口运动鞋可以享受什么FTA优惠？',msg_ph:'输入您的问题，例如从中国进口蓝牙音箱的关税 (Enter = 发送，Shift+Enter = 换行)',attach:'添加附件',send:'发送 · 10积分',auth_t:'登录',auth_sub:'登录后即可提问和充值',google_btn:'用Google登录',divider:'或',email_ph:'邮箱',pw_ph:'密码',login_btn:'登录',reg_btn:'注册',consent_t:'数据授权',consent_d:'请允许记录问答内容以改进服务（提问前必须同意）',consent_yes:'我同意',consent_ok:'确认',topup_t:'充值',topup_sub:'1积分 = ฿1 · 每题10积分 · 可用银行卡或PromptPay支付',help_t:'使用方法',help1:'登录即得30试用积分',help2:'输入问题，可添加图片或文件（最大20MB）',help3:'积分用完可随时充值，通过Stripe支付（银行卡/PromptPay）',footer_lead:'如需进口服务或HS编码咨询，请联系我们：',logo:'标志',close:'关闭',copy:'复制',copied:'已复制',copy_fail:'复制失败',chars:'字符',err:'错误：',need_email:'请输入邮箱',me_fail:'账户加载失败：',need_consent:'请先勾选同意',topup_btn:'充值',topup_fail:'充值失败：',conn_lost:'连接中断',topup_ok:'支付成功，积分已到账',topup_cancel:'已取消支付'};
 const origTitle=document.title;
-function lang(){try{return localStorage.getItem('tc-lang')==='en'?'en':'th';}catch(e){return 'th';}}
-function T(k){return lang()==='en'?(EN[k]||k):(THD[k]||k);}
-function applyLang(lg){const en=lg==='en';
-document.querySelectorAll('[data-i18n]').forEach(el=>{if(el.dataset.iorig==null)el.dataset.iorig=el.textContent;const v=en?EN[el.getAttribute('data-i18n')]:null;el.textContent=v==null?el.dataset.iorig:v;});
-document.querySelectorAll('[data-i18n-ph]').forEach(el=>{if(el.dataset.ioph==null)el.dataset.ioph=el.getAttribute('placeholder')||'';const v=en?EN[el.getAttribute('data-i18n-ph')]:null;el.setAttribute('placeholder',v==null?el.dataset.ioph:v);});
-document.querySelectorAll('[data-i18n-alt]').forEach(el=>{if(el.dataset.ioalt==null)el.dataset.ioalt=el.getAttribute('alt')||'';const v=en?EN[el.getAttribute('data-i18n-alt')]:null;el.setAttribute('alt',v==null?el.dataset.ioalt:v);});
-document.title=en?EN._title:origTitle;document.documentElement.setAttribute('lang',en?'en':'th');
-langbtn.textContent=en?'TH':'EN';
+function lang(){try{const v=localStorage.getItem('tc-lang');return v==='en'||v==='zh'?v:'th';}catch(e){return 'th';}}
+function T(k){const l=lang();return l==='en'?(EN[k]||k):l==='zh'?(ZH[k]||k):(THD[k]||k);}
+function nextLang(lg){return lg==='th'?'en':lg==='en'?'zh':'th';}
+function langLabel(lg){return lg==='th'?'EN':lg==='en'?'中文':'TH';}
+function applyLang(lg){const D=lg==='en'?EN:lg==='zh'?ZH:null;
+document.querySelectorAll('[data-i18n]').forEach(el=>{if(el.dataset.iorig==null)el.dataset.iorig=el.textContent;const v=D?D[el.getAttribute('data-i18n')]:null;el.textContent=v==null?el.dataset.iorig:v;});
+document.querySelectorAll('[data-i18n-ph]').forEach(el=>{if(el.dataset.ioph==null)el.dataset.ioph=el.getAttribute('placeholder')||'';const v=D?D[el.getAttribute('data-i18n-ph')]:null;el.setAttribute('placeholder',v==null?el.dataset.ioph:v);});
+document.querySelectorAll('[data-i18n-alt]').forEach(el=>{if(el.dataset.ioalt==null)el.dataset.ioalt=el.getAttribute('alt')||'';const v=D?D[el.getAttribute('data-i18n-alt')]:null;el.setAttribute('alt',v==null?el.dataset.ioalt:v);});
+document.title=D?D._title:origTitle;document.documentElement.setAttribute('lang',lg==='zh'?'zh-CN':lg);
+langbtn.textContent=langLabel(lg);
 try{localStorage.setItem('tc-lang',lg);}catch(e){}
 if(loggedIn)loadPackages();}
-function toggleLang(){applyLang(lang()==='en'?'th':'en');}
+function toggleLang(){applyLang(nextLang(lang()));}
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function md(src){let h=esc(src);
 h=h.replace(/`([^`]+)`/g,'<code>$1</code>');
@@ -221,7 +224,7 @@ if(m=ln.match(/^\s*[-*]\s+(.*)/)){if(inOL){out+='</ol>';inOL=false;}if(!inUL){ou
 if(m=ln.match(/^\s*\d+[.)]\s+(.*)/)){if(inUL){out+='</ul>';inUL=false;}if(!inOL){out+='<ol>';inOL=true;}out+='<li>'+m[1]+'</li>';continue;}
 close();if(ln.trim())out+='<p>'+ln+'</p>';}
 close();return out||'<p></p>';}
-function now(){return new Date().toLocaleTimeString(lang()==='en'?'en-US':'th-TH',{hour:'2-digit',minute:'2-digit'});}
+function now(){const l=lang();return new Date().toLocaleTimeString(l==='en'?'en-US':l==='zh'?'zh-CN':'th-TH',{hour:'2-digit',minute:'2-digit'});}
 function banner(text,kind){const b=document.getElementById('banner');
 if(!text){b.className='';b.innerHTML='';return;}
 b.className='show '+(kind||'');b.innerHTML='<span></span><button class="x" aria-label="'+T('close')+'" onclick="banner()">×</button>';
@@ -255,7 +258,7 @@ async function emailRegister(){const e=email.value.trim();if(!e){autherr.textCon
 async function logout(){await auth.signOut();}
 async function loadMe(){try{const m=await api('/me');credits.textContent=m.credits;document.getElementById('useremail').textContent=m.email||'';document.getElementById('consentbox').style.display=m.consent_ts?'none':'block';loadPackages();}catch(e){banner(T('me_fail')+e.message,'warn');}}
 async function giveConsent(){if(!consent.checked){banner(T('need_consent'),'warn');return;}await api('/consent',{method:'POST'});banner('');loadMe();}
-function pkgHint(p,per){return lang()==='en'?('฿'+p.thb+' · ฿'+per+' per credit'):('฿'+p.thb+' · เครดิตละ ฿'+per);}
+function pkgHint(p,per){const l=lang();return l==='en'?('฿'+p.thb+' · ฿'+per+' per credit'):l==='zh'?('฿'+p.thb+' · 每题฿'+per):('฿'+p.thb+' · เครดิตละ ฿'+per);}
 async function loadPackages(){try{const d=await (await fetch('/billing/packages')).json();
 pkgs.innerHTML=d.packages.map(p=>{const per=(p.thb/p.credits).toFixed(2).replace(/\.00$/,'');
 return '<div class="pkg"><div><div class="pkg-label">'+p.label+'</div><div class="hint">'+pkgHint(p,per)+'</div></div><button class="accent small" onclick="topup(\''+p.price_id+'\')">'+T('topup_btn')+'</button></div>';}).join('');}catch(e){}}
