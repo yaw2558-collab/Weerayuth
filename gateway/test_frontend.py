@@ -57,3 +57,13 @@ def test_chat_uses_sse_streaming():
 def test_promptpay_mentioned():
   html = _index_html()
   assert html.count("PromptPay") >= 2  # topup sub + how-to steps
+
+
+def test_contact_email_present():
+  html = _index_html()
+  assert "mailto:yaw2558@gmail.com" in html
+
+
+def test_chat_markdown_linkifies_mailto():
+  html = _index_html()
+  assert "|mailto:)" in html  # md() link regex accepts mailto: (AI answer footer)

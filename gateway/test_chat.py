@@ -211,3 +211,7 @@ def test_chat_sse_agent_error_yields_error_event(monkeypatch):
   assert ("token", {"text": "เริ่ม"}) in events
   assert events[-1][0] == "error"
   assert charges == []  # failures are not charged
+
+
+def test_answer_footer_has_contact_email():
+  assert "mailto:yaw2558@gmail.com" in main.FOOTER

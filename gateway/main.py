@@ -72,7 +72,8 @@ CACHE_TTL_S = 30 * 24 * 3600  # cached answers stay servable for 30 days
 FOOTER = (
   "\n\n---\nสนใจใช้บริการนำเข้า/ปรึกษาพิกัดเพิ่มเติม ติดต่อเรา: "
   "[LINE OA](https://lin.ee/Z55Jn7C) | "
-  "[Facebook](https://www.facebook.com/weerayuth.sangkamanee.2025)"
+  "[Facebook](https://www.facebook.com/weerayuth.sangkamanee.2025) | "
+  "[yaw2558@gmail.com](mailto:yaw2558@gmail.com)"
 )
 
 # Pricing in USD (published Gemini pricing) - telemetry estimate only.

@@ -182,7 +182,7 @@ body:not(.in) .side-col{order:-1}
 </div>
 
 <footer>สนใจใช้บริการนำเข้า/ปรึกษาพิกัดเพิ่มเติม ติดต่อเรา:
-<a href="https://lin.ee/Z55Jn7C">LINE OA</a> · <a href="https://www.facebook.com/weerayuth.sangkamanee.2025">Facebook</a></footer>
+<a href="https://lin.ee/Z55Jn7C">LINE OA</a> · <a href="https://www.facebook.com/weerayuth.sangkamanee.2025">Facebook</a> · <a href="mailto:yaw2558@gmail.com">yaw2558@gmail.com</a></footer>
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -193,7 +193,7 @@ const auth=firebase.auth();let sid=null;let busy=false;let loggedIn=false;
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function md(src){let h=esc(src);
 h=h.replace(/`([^`]+)`/g,'<code>$1</code>');
-h=h.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+h=h.replace(/\[([^\]]+)\]\(((?:https?:\/\/|mailto:)[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
 h=h.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
 const lines=h.split('\n');let out='',inUL=false,inOL=false;
 const close=()=>{if(inUL){out+='</ul>';inUL=false;}if(inOL){out+='</ol>';inOL=false;}};

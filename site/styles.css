@@ -35,6 +35,8 @@ a{color:var(--brand)}
 .btn.sm{font-size:14px;padding:8px 20px}
 .btn.line{background:#06c755;border-color:#06c755;color:#fff;min-width:170px}
 .btn.fb{background:#1877f2;border-color:#1877f2;color:#fff;min-width:170px}
+.btn.mail{background:#fff;color:var(--brand);min-width:170px}
+.mail-addr{margin:14px 0 0;font-size:14.5px}
 .cta-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:20px}
 .center-row{justify-content:center}
 
