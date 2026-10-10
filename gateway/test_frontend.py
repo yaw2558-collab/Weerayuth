@@ -67,3 +67,11 @@ def test_contact_email_present():
 def test_chat_markdown_linkifies_mailto():
   html = _index_html()
   assert "|mailto:)" in html  # md() link regex accepts mailto: (AI answer footer)
+
+
+def test_lang_toggle_present():
+  html = _index_html()
+  assert 'id="langbtn"' in html
+  assert "data-i18n=" in html
+  assert "tc-lang" in html  # localStorage persistence key
+  assert "Thai Customs Adviser" in html  # EN strings embedded

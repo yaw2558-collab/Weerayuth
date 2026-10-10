@@ -24,6 +24,8 @@ a{color:var(--brand)}
 .nav a{text-decoration:none;color:var(--ink);font-size:14.5px;padding:7px 12px;border-radius:8px}
 .nav a:hover{background:var(--bg)}
 .bar-cta{display:flex;align-items:center;gap:8px}
+.langbtn{background:#fff;border:1px solid var(--line);border-radius:999px;font-size:13px;font-weight:600;padding:5px 13px;cursor:pointer;color:var(--brand)}
+.langbtn:hover{border-color:var(--brand)}
 .menu{display:none;background:none;border:1px solid var(--line);border-radius:8px;font-size:18px;padding:4px 12px;cursor:pointer;color:var(--ink)}
 
 /* buttons */
