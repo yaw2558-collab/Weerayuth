@@ -158,7 +158,9 @@ def test_vague_with_attachment_runs_runner(monkeypatch):
   )
   assert r.status_code == 200
   d = r.json()
-  assert d["answer"] == "พิกัด 8518" + main.FOOTER  # normal path, charged
+  assert d["answer"] == (
+    "พิกัด 8518" + "\n\n" + main.DISCLAIMER_SHORT + main.FOOTER
+  )  # normal path, charged
   assert d["usage"]["free"] is False
   assert len(charges) == 1
 
@@ -235,7 +237,12 @@ def test_breaker_keeps_long_answer_and_caches(monkeypatch):
   assert r.status_code == 200
   d = r.json()
   assert d["usage"]["capped"] is True
-  assert d["answer"] == "y" * 50 * main.MAX_GROUNDING_QUERIES + main.FOOTER
+  assert d["answer"] == (
+    "y" * 50 * main.MAX_GROUNDING_QUERIES
+    + "\n\n"
+    + main.DISCLAIMER_SHORT
+    + main.FOOTER
+  )
   assert len(puts) == 1  # full answer is cacheable
 
 
@@ -255,7 +262,7 @@ def test_normal_run_under_cap_not_capped(monkeypatch):
   d = r.json()
   assert d["usage"]["grounding_calls"] == 8  # probe-verified real shape
   assert d["usage"]["capped"] is False
-  assert d["answer"] == "พิกัด 6109" + main.FOOTER
+  assert d["answer"] == "พิกัด 6109" + "\n\n" + main.DISCLAIMER_SHORT + main.FOOTER
 
 
 def test_agent_prompt_has_search_budget():

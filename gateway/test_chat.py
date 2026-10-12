@@ -102,12 +102,15 @@ def test_chat_json_returns_answer_and_charges(monkeypatch):
   r = client.post("/chat", data={"message": "นำเข้าลำโพงบลูทูธจากจีน เสียอากรเท่าไหร่"}, headers=AUTH)
   assert r.status_code == 200
   d = r.json()
-  assert d["answer"] == "พิกัด 8518" + main.FOOTER  # partials not in final
+  assert d["answer"] == (
+    "พิกัด 8518" + "\n\n" + main.DISCLAIMER_SHORT + main.FOOTER
+  )  # partials not in final; disclaimer backstop appended
   assert d["credits_left"] == 20
   assert d["usage"]["prompt_tokens"] == 100
   assert d["usage"]["candidates_tokens"] == 50
   assert d["session_id"].startswith("web-")
-  assert len(puts) == 1 and puts[0][1] == "พิกัด 8518"  # raw cached, no footer
+  assert len(puts) == 1
+  assert puts[0][1] == "พิกัด 8518" + "\n\n" + main.DISCLAIMER_SHORT
   assert charges[0][0] == "user1" and charges[0][3] is False
 
 
@@ -131,7 +134,9 @@ def test_chat_sse_streams_tokens_then_done(monkeypatch):
   assert ("token", {"text": "สวัสดี"}) in events
   assert events[-1][0] == "done"
   done = events[-1][1]
-  assert done["answer"] == "พิกัด 8518" + main.FOOTER
+  assert done["answer"] == (
+    "พิกัด 8518" + "\n\n" + main.DISCLAIMER_SHORT + main.FOOTER
+  )
   assert done["credits_left"] == 20
   assert done["usage"]["prompt_tokens"] == 100
 

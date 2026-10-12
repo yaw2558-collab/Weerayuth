@@ -21,6 +21,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import time
 import uuid
 from pathlib import Path
@@ -45,6 +46,9 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types as genai_types
 
 from thai_customs_agent.agent import root_agent
+from thai_customs_agent.tariff_tools import extract_hs_codes
+from thai_customs_agent.tariff_tools import format_verify_box
+from thai_customs_agent.tariff_tools import retrieve_context
 
 APP_NAME = "thai_customs_agent"
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "glowing-magnet-330507")
@@ -77,6 +81,13 @@ CACHE_TTL_S = 30 * 24 * 3600  # cached answers stay servable for 30 days
 # search queries (built-in tools run server-side, so no callback can cap them).
 MAX_GROUNDING_QUERIES = 15  # unique web_search_queries per chat turn, then stop
 MIN_ANSWER_CHARS = 100  # below this after a breaker trip, use CAPPED_MD
+MAX_SOURCES = 8  # verifiable reference links appended per answer
+
+DISCLAIMER_SHORT = (
+  "*ข้อมูลนี้เพื่อประกอบการพิจารณาเบื้องต้น ไม่ใช่คำวินิจฉัยทางการ "
+  "หากต้องการผลผูกพันทางกฎหมายให้ยื่นขอคำวินิจฉัยพิกัดล่วงหน้า "
+  "(Advance Ruling) ต่อกรมศุลกากร หรือโทร 1164*"
+)
 
 # Tokens stripped to find the "core" of a question. Generic customs nouns +
 # question scaffolding / politeness particles (Thai + English).
@@ -556,7 +567,7 @@ def _cache_put(key: str, answer: str, usage: dict) -> None:
 
 
 def _new_acc() -> dict:
-  return {"prompt": 0, "cand": 0, "think": 0, "seen": set()}
+  return {"prompt": 0, "cand": 0, "think": 0, "seen": set(), "sources": []}
 
 
 def _accumulate_usage(event, acc: dict) -> None:
@@ -573,6 +584,19 @@ def _accumulate_usage(event, acc: dict) -> None:
     for q in (getattr(gm, "web_search_queries", None) or []):
       if q:
         acc["seen"].add(q)
+    for chunk in (getattr(gm, "grounding_chunks", None) or []):
+      # google_search results arrive as .web, url_context reads as
+      # .retrieved_context — collect both.
+      for part in (
+        getattr(chunk, "web", None),
+        getattr(chunk, "retrieved_context", None),
+      ):
+        uri = getattr(part, "uri", None) if part is not None else None
+        if not uri or len(acc["sources"]) >= MAX_SOURCES:
+          continue
+        if all(s[1] != uri for s in acc["sources"]):
+          title = getattr(part, "title", None) or uri
+          acc["sources"].append((title, uri))
 
 
 def _event_texts(event) -> list[str]:
@@ -602,6 +626,24 @@ def _usage_dict(acc: dict, latency: float, capped: bool = False) -> dict:
     "capped": capped,
     "free": False,
   }
+
+
+def _finalize_answer(answer: str, acc: dict) -> str:
+  """Strip broken [n] citation markers, append verifiable links + disclaimer."""
+  out = re.sub(r"\[[\d,\s]+\]", "", answer)
+  out = re.sub(r"\n{3,}", "\n\n", out).strip()
+  box = format_verify_box(extract_hs_codes(out))
+  if box:
+    out += "\n\n" + box
+  if acc.get("sources"):
+    links = "\n".join(
+      f"- [{t.replace('[', '(').replace(']', ')')}]({u})"
+      for t, u in acc["sources"]
+    )
+    out += "\n\n**ลิงก์อ้างอิงที่ตรวจสอบได้:**\n" + links
+  if "Advance Ruling" not in out:
+    out += "\n\n" + DISCLAIMER_SHORT
+  return out
 
 
 def _is_vague_question(message: str) -> bool:
@@ -723,6 +765,8 @@ async def _chat_once_payload(uid, sid, msg, cache_key):
   if capped and len(answer.strip()) < MIN_ANSWER_CHARS:
     answer = CAPPED_MD
     cache_key = None  # never cache the fallback
+  else:
+    answer = _finalize_answer(answer, acc)
   usage = _usage_dict(acc, latency, capped)
   if cache_key:
     _cache_put(cache_key, answer, usage)
@@ -758,6 +802,8 @@ async def _chat_sse_gen(uid, sid, message, msg, attachment, cache_key):
   if capped and len(answer.strip()) < MIN_ANSWER_CHARS:
     answer = CAPPED_MD
     cache_key = None  # never cache the fallback
+  else:
+    answer = _finalize_answer(answer, acc)
   usage = _usage_dict(acc, latency, capped)
   if cache_key:
     _cache_put(cache_key, answer, usage)
@@ -819,6 +865,10 @@ async def chat(
         "size": len(data),
         "kind": kind,
       }
+  if attachment is None:
+    tctx = retrieve_context(message)
+    if tctx:
+      text = tctx + "\n\n[คำถาม]\n" + text
   parts.append(genai_types.Part(text=text))
 
   sid = session_id or f"web-{uuid.uuid4().hex[:12]}"
@@ -867,7 +917,10 @@ async def chat(
     return payload
 
   # Instant path: text-only repeats are served from cache (still charged).
-  cache_key = _cache_key(_normalize_question(text)) if attachment is None else None
+  # Keyed on the raw message: retrieval context is deterministic per message.
+  cache_key = (
+    _cache_key(_normalize_question(message)) if attachment is None else None
+  )
   if cache_key:
     hit = _cache_get(cache_key)
     if hit is not None:
