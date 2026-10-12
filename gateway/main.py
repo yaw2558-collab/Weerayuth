@@ -318,6 +318,21 @@ def _collection_docs(name: str) -> list[dict]:
   return [d.to_dict() or {} for d in db.collection(name).stream()]
 
 
+def _collection_items(name: str) -> list[tuple[str, dict]]:
+  return [(d.id, d.to_dict() or {}) for d in db.collection(name).stream()]
+
+
+def _iso(v):
+  if v is None:
+    return None
+  if hasattr(v, "isoformat"):
+    try:
+      return v.isoformat()
+    except Exception:
+      return None
+  return str(v)
+
+
 @app.get("/admin/stats")
 def stats(x_admin_key: str = Header(default="")):
   if x_admin_key != ADMIN_KEY:
@@ -344,6 +359,56 @@ def stats(x_admin_key: str = Header(default="")):
     "est_cost_usd": round(sum(u.get("est_cost_usd", 0) for u in usage), 4),
     "grounding_calls": sum(u.get("grounding_calls", 0) for u in usage),
   }
+
+
+@app.get("/admin/users")
+def admin_users(x_admin_key: str = Header(default="")):
+  if x_admin_key != ADMIN_KEY:
+    raise HTTPException(403, "bad admin key")
+  per: dict[str, dict] = {}
+  for uid, u in _collection_items("users"):
+    per[uid] = {
+      "uid": uid,
+      "email": u.get("email"),
+      "credits": u.get("credits", 0),
+      "created": _iso(u.get("created")),
+      "queries": 0,
+      "est_cost_usd": 0.0,
+      "grounding_calls": 0,
+      "last_ts": None,
+    }
+  for row in _collection_docs("usage_logs"):
+    uid = str(row.get("user_id", ""))
+    if uid.startswith("measure-"):
+      continue
+    e = per.setdefault(
+      uid,
+      {
+        "uid": uid,
+        "email": None,
+        "credits": 0,
+        "created": None,
+        "queries": 0,
+        "est_cost_usd": 0.0,
+        "grounding_calls": 0,
+        "last_ts": None,
+      },
+    )
+    e["queries"] += 1
+    e["est_cost_usd"] = round(
+      e["est_cost_usd"] + (row.get("est_cost_usd") or 0), 4
+    )
+    e["grounding_calls"] += row.get("grounding_calls") or 0
+    ts = _iso(row.get("ts"))
+    if ts and (e["last_ts"] is None or ts > e["last_ts"]):
+      e["last_ts"] = ts
+  act = sorted(
+    (e for e in per.values() if e["last_ts"]),
+    key=lambda e: e["last_ts"],
+    reverse=True,
+  )
+  idle = [e for e in per.values() if not e["last_ts"]]
+  return {"users": act + idle}
 
 
 @app.post("/admin/grant")

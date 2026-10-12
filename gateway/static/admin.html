@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>thai-customs admin</title>
 <style>
-body{font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:16px}
+body{font-family:system-ui,sans-serif;max-width:920px;margin:0 auto;padding:16px}
 table{border-collapse:collapse;width:100%;margin-top:12px}
 td,th{border:1px solid #ccc;padding:6px 10px;text-align:left}
 th{background:#f0f0f0}
@@ -23,12 +23,17 @@ input{padding:8px}
 <button onclick="load()">ดูสถิติ</button>
 </div>
 <div id="error"></div>
-<table id="tbl" style="display:none">
+<table id="tbl" style="display:none;max-width:640px">
 <tr><th>ตัวชี้วัด</th><th>ค่า</th></tr>
 </table>
+<h3 id="uh" style="display:none">รายชื่อผู้ใช้</h3>
+<table id="users" style="display:none">
+</table>
 <script>
-const LABELS={users:'ผู้ใช้ทั้งหมด',credits_outstanding:'เครดิตคงเหลือรวม',payments_succeeded:'จ่ายสำเร็จ (ครั้ง)',payments_failed:'จ่ายล้มเหลว (ครั้ง)',revenue_thb:'รายรับรวม test+live (บาท)',revenue_live_thb:'รายรับจริง live (บาท)',credits_sold:'เครดิตที่ขายได้',queries:'คำถามทั้งหมด',est_cost_usd:'ต้นทุน AI โดยประมาณ (USD)',grounding_calls:'ครั้งที่ใช้ grounding'};
-async function load(){error.textContent='';try{const r=await fetch('/admin/stats',{headers:{'x-admin-key':key.value}});if(!r.ok)throw new Error(r.status+' '+await r.text());const s=await r.json();const t=document.getElementById('tbl');t.style.display='table';t.innerHTML='<tr><th>ตัวชี้วัด</th><th>ค่า</th></tr>'+Object.entries(LABELS).map(([k,th])=>`<tr><td>${th}</td><td class="num">${s[k]}</td></tr>`).join('');}catch(e){error.textContent='ผิดพลาด: '+e.message;}}
+const LABELS={users:'ผู้ใช้ทั้งหมด',credits_outstanding:'เครดิตคงเหลือรวม',payments_succeeded:'จ่ายสำเร็จ (ครั้ง)',payments_failed:'จ่ายล้มเหลว (ครั้ง)',revenue_thb:'รายรับรวม test+live (บาท)',revenue_live_thb:'รายรับจริง live (บาท)',credits_sold:'เครดิตที่ขายได้',queries:'คำถามทั้งหมด',est_cost_usd:'ต้นทุน AI โดยประมาณ (USD)',grounding_calls:'ค้น Google (queries)'};
+const esc=s=>String(s??'-').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const short=ts=>ts?ts.slice(0,16).replace('T',' '):'-';
+async function load(){error.textContent='';try{const h={headers:{'x-admin-key':key.value}};const r=await fetch('/admin/stats',h);if(!r.ok)throw new Error(r.status+' '+await r.text());const s=await r.json();const t=document.getElementById('tbl');t.style.display='table';t.innerHTML='<tr><th>ตัวชี้วัด</th><th>ค่า</th></tr>'+Object.entries(LABELS).map(([k,th])=>`<tr><td>${th}</td><td class="num">${s[k]}</td></tr>`).join('');const ru=await fetch('/admin/users',h);if(!ru.ok)throw new Error(ru.status+' '+await ru.text());const u=await ru.json();document.getElementById('uh').style.display='block';const tu=document.getElementById('users');tu.style.display='table';tu.innerHTML='<tr><th>อีเมล</th><th>เครดิต</th><th>คำถาม</th><th>ต้นทุน (USD)</th><th>queries</th><th>ใช้ล่าสุด</th><th>สมัคร</th></tr>'+u.users.map(x=>`<tr><td>${esc(x.email||('uid:'+x.uid))}</td><td class="num">${x.credits}</td><td class="num">${x.queries}</td><td class="num">${x.est_cost_usd}</td><td class="num">${x.grounding_calls}</td><td>${short(x.last_ts)}</td><td>${short(x.created)}</td></tr>`).join('');}catch(e){error.textContent='ผิดพลาด: '+e.message;}}
 </script>
 </body>
 </html>
