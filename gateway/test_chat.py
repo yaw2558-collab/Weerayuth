@@ -99,7 +99,7 @@ def test_chat_json_returns_answer_and_charges(monkeypatch):
   monkeypatch.setattr(main, "_charge_and_log", fake_charge)
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: puts.append((k, a, u)))
 
-  r = client.post("/chat", data={"message": "hi"}, headers=AUTH)
+  r = client.post("/chat", data={"message": "นำเข้าลำโพงบลูทูธจากจีน เสียอากรเท่าไหร่"}, headers=AUTH)
   assert r.status_code == 200
   d = r.json()
   assert d["answer"] == "พิกัด 8518" + main.FOOTER  # partials not in final
@@ -123,7 +123,7 @@ def test_chat_sse_streams_tokens_then_done(monkeypatch):
   )
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
 
-  r = client.post("/chat", data={"message": "hi"}, headers=SSE)
+  r = client.post("/chat", data={"message": "นำเข้าลำโพงบลูทูธจากจีน เสียอากรเท่าไหร่"}, headers=SSE)
   assert r.status_code == 200
   assert r.headers["content-type"].startswith("text/event-stream")
   events = _parse_sse(r.text)
@@ -156,14 +156,14 @@ def test_chat_cache_hit_skips_runner_json_and_sse(monkeypatch):
 
   monkeypatch.setattr(main, "_charge_and_log", fake_charge)
 
-  r = client.post("/chat", data={"message": "ถามซ้ำ"}, headers=AUTH)
+  r = client.post("/chat", data={"message": "คำถามซ้ำสำหรับทดสอบแคช"}, headers=AUTH)
   assert r.status_code == 200
   d = r.json()
   assert d["answer"] == "cached-raw" + main.FOOTER
   assert d["usage"]["cached"] is True
   assert d["usage"]["latency_s"] == 0.0
 
-  r = client.post("/chat", data={"message": "ถามซ้ำ"}, headers=SSE)
+  r = client.post("/chat", data={"message": "คำถามซ้ำสำหรับทดสอบแคช"}, headers=SSE)
   assert r.status_code == 200
   events = _parse_sse(r.text)
   assert [e for e, _ in events] == ["done"]
@@ -180,13 +180,13 @@ def test_chat_cache_hit_insufficient_credits(monkeypatch):
   )
   monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: None)
 
-  r = client.post("/chat", data={"message": "ถามซ้ำ"}, headers=AUTH)
+  r = client.post("/chat", data={"message": "คำถามซ้ำสำหรับทดสอบแคช"}, headers=AUTH)
   assert r.status_code == 402
 
 
 def test_chat_requires_consent(monkeypatch):
   _auth(monkeypatch, consent=False)
-  r = client.post("/chat", data={"message": "hi"}, headers=AUTH)
+  r = client.post("/chat", data={"message": "นำเข้าลำโพงบลูทูธจากจีน เสียอากรเท่าไหร่"}, headers=AUTH)
   assert r.status_code == 403
 
 
@@ -204,7 +204,7 @@ def test_chat_sse_agent_error_yields_error_event(monkeypatch):
   )
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
 
-  r = client.post("/chat", data={"message": "hi"}, headers=SSE)
+  r = client.post("/chat", data={"message": "นำเข้าลำโพงบลูทูธจากจีน เสียอากรเท่าไหร่"}, headers=SSE)
   assert r.status_code == 200
   events = _parse_sse(r.text)
   assert events[0][0] == "stage"

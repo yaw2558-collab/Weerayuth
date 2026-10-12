@@ -9,6 +9,8 @@
   (card + PromptPay; webhook also handles async payment events)
 - POST /chat streams SSE when Accept: text/event-stream, else returns JSON
 - Text-only answers are cached in answer_cache (30d TTL) for instant repeats
+- Vague questions get a free template clarification (no model call, no charge)
+- Runs stop after MAX_GROUNDING_QUERIES unique searches (breaker fallback)
 - Serves minimal chat frontend at /
 
 Run locally from thai-customs/ (reads gateway/.env if present):
@@ -68,6 +70,64 @@ MAX_FILE_MB = 20
 MAX_TEXT_CHARS = 100_000
 CACHE_VERSION = "v1"  # bump to invalidate answer_cache (e.g. model change)
 CACHE_TTL_S = 30 * 24 * 3600  # cached answers stay servable for 30 days
+
+# Guardrails (2026-10-12): vague questions used to spiral into dozens of
+# server-side searches (~$1/query vs 10-credit revenue). Vague input now gets
+# a free template clarification; real runs are breaker-capped by unique
+# search queries (built-in tools run server-side, so no callback can cap them).
+MAX_GROUNDING_QUERIES = 15  # unique web_search_queries per chat turn, then stop
+MIN_ANSWER_CHARS = 100  # below this after a breaker trip, use CAPPED_MD
+
+# Tokens stripped to find the "core" of a question. Generic customs nouns +
+# question scaffolding / politeness particles (Thai + English).
+_VAGUE_STRIP = frozenset([
+  "กรมศุลกากร", "ศุลกากร", "พิกัดอัตรา", "พิกัด", "อากรขาเข้า", "อากร",
+  "ขาเข้า", "นำเข้า", "ส่งออก", "ภาษี", "hs code", "hscode", "import duty",
+  "duties", "duty", "tariffs", "tariff", "customs", "import", "export",
+  "form e", "forme", "rcep", "atiga", "jtepa", "tafta", "fta", "hs", "code",
+  "อัตรา",
+  "อยากทราบ", "อยากรู้", "คืออะไร", "เท่าไหร่", "เท่าไร", "อย่างไร",
+  "ยังไง", "หรือไม่", "หรือเปล่า", "เมื่อไหร่", "เพราะอะไร", "ทำไม",
+  "ที่ไหน", "หน่อยครับ", "หน่อยค่ะ", "หน่อยคะ", "หน่อย", "ครับผม",
+  "ครับ", "ค่ะ", "คะ", "ช่วยหน่อย", "ช่วย", "ให้หน่อย", "ให้ที", "ถามหน่อย",
+  "บอกหน่อย", "ตอบหน่อย", "ขอ", "หา", "ให้", "บอก", "ถาม", "ตอบ", "เช็ค",
+  "เชค", "ตรวจสอบ", "ดูให้", "ดู", "อะไร", "คือ", "ได้ไหม", "ได้มั้ย",
+  "ไหม", "มั้ย", "ที", "นะ", "น่ะ", "จ๊ะ", "จ้ะ", "ของ", "กับ", "ว่า", "กี่",
+  "please", "what", "with", "from", "that", "this", "which", "much",
+  "many", "how", "why", "when", "where", "the", "for", "and", "are",
+  "does", "did", "can", "could", "would", "should", "you", "your",
+  "want", "know", "rate", "rates", "price", "cost",
+])
+# Interrogative markers: with enough length, the message is a complete
+# question even if its core is short ("Form E ใช้ยังไง").
+_VAGUE_INTERROGATIVE = frozenset([
+  "ไหม", "มั้ย", "หรือเปล่า", "หรือไม่", "ยังไง", "อย่างไร", "เท่าไหร่",
+  "เท่าไร", "คืออะไร", "กี่", "เมื่อไหร่", "ที่ไหน", "ทำไม", "?",
+  "how", "what", "why", "when", "where", "which",
+])
+_VAGUE_GREETINGS = frozenset([
+  "hi", "hello", "hey", "yo", "สวัสดี", "หวัดดี", "ดีครับ", "ดีค่ะ",
+  "ดีคะ", "good morning", "good afternoon",
+])
+
+CLARIFY_MD = (
+  "**ขอข้อมูลเพิ่มนิดนึง เพื่อหาพิกัดให้ตรงนะครับ**\n\n"
+  "พิมพ์สินค้าที่จะนำเข้ามาให้ชัดกว่านี้หน่อย เช่น\n"
+  "- สินค้าคืออะไร (เช่น ลำโพงบลูทูธ, เสื้อยืดผ้าฝ้าย)\n"
+  "- วัสดุ/ส่วนประกอบหลัก และหน้าที่ใช้งาน\n"
+  "- สภาพ: สำเร็จรูป / ชิ้นส่วน / วัตถุดิบ\n"
+  "- ประเทศต้นทาง (เช่น จีน) — มีผลต่อสิทธิ FTA\n\n"
+  "ตัวอย่าง: \"นำเข้าลำโพงบลูทูธจากจีน เสียอากรเท่าไหร่\"\n\n"
+  "*ข้อความนี้ไม่ตัดเครดิตครับ ถามต่อได้เลย*"
+)
+
+CAPPED_MD = (
+  "**ค้นข้อมูลหลายรอบแล้วยังสรุปไม่ได้**\n\n"
+  "ผมค้นจากแหล่งทางการหลายรอบแล้วแต่ข้อมูลยังไม่พอฟันธงพิกัด "
+  "ช่วยบอกรายละเอียดเพิ่มแล้วถามใหม่นะครับ เช่น ชื่อสินค้า วัสดุ "
+  "หน้าที่ใช้งาน และประเทศต้นทาง\n\n"
+  "ตัวอย่าง: \"นำเข้าเสื้อยืดผ้าฝ้ายจากจีน เสียอากรเท่าไหร่\""
+)
 
 FOOTER = (
   "\n\n---\nสนใจใช้บริการนำเข้า/ปรึกษาพิกัดเพิ่มเติม ติดต่อเรา: "
@@ -430,14 +490,24 @@ def _cache_put(key: str, answer: str, usage: dict) -> None:
     pass
 
 
+def _new_acc() -> dict:
+  return {"prompt": 0, "cand": 0, "think": 0, "seen": set()}
+
+
 def _accumulate_usage(event, acc: dict) -> None:
   um = getattr(event, "usage_metadata", None)
   if um is not None:
     acc["prompt"] += getattr(um, "prompt_token_count", 0) or 0
     acc["cand"] += getattr(um, "candidates_token_count", 0) or 0
     acc["think"] += getattr(um, "thoughts_token_count", 0) or 0
-  if getattr(event, "grounding_metadata", None) is not None:
-    acc["grounding"] += 1
+  # Billable metric: unique Google Search queries across the run. (Counting
+  # events with grounding_metadata is wrong both ways: SSE repeats the same
+  # metadata on many partial chunks, while one round can hold many queries.)
+  gm = getattr(event, "grounding_metadata", None)
+  if gm is not None:
+    for q in (getattr(gm, "web_search_queries", None) or []):
+      if q:
+        acc["seen"].add(q)
 
 
 def _event_texts(event) -> list[str]:
@@ -450,20 +520,73 @@ def _event_texts(event) -> list[str]:
   return out
 
 
-def _usage_dict(acc: dict, latency: float) -> dict:
+def _usage_dict(acc: dict, latency: float, capped: bool = False) -> dict:
+  grounding = len(acc["seen"])
   est_cost = (
     acc["prompt"] / 1e6 * IN_PER_1M
     + (acc["cand"] + acc["think"]) / 1e6 * OUT_PER_1M
-    + acc["grounding"] / 1000 * GROUND_PER_1K
+    + grounding / 1000 * GROUND_PER_1K
   )
   return {
     "prompt_tokens": acc["prompt"],
     "candidates_tokens": acc["cand"],
     "thoughts_tokens": acc["think"],
-    "grounding_calls": acc["grounding"],
+    "grounding_calls": grounding,
     "latency_s": round(latency, 1),
     "est_cost_usd": round(est_cost, 4),
+    "capped": capped,
+    "free": False,
   }
+
+
+def _is_vague_question(message: str) -> bool:
+  """True when the message has no product/question substance to search on.
+
+  Errs toward vague: a free clarification beats a $1 search spiral.
+  """
+  t = " ".join(message.strip().lower().split())
+  if len(t) < 2:
+    return True
+  if t in _VAGUE_GREETINGS:
+    return True
+  if any(ch.isdigit() for ch in t):
+    return False  # HS codes / amounts are specific
+  if len(t) >= 8 and any(m in t for m in _VAGUE_INTERROGATIVE):
+    return False  # complete question shape
+  core = t
+  for tok in sorted(_VAGUE_STRIP, key=len, reverse=True):
+    core = core.replace(tok, "")
+  core = "".join(ch for ch in core if ch.isalnum())
+  if core in _VAGUE_GREETINGS:
+    return True
+  # Note: Thai above/below vowels and tone marks are not alnum, so a short
+  # product word like "เสื้อผ้า" counts as 5. Below that, ask back for free.
+  return len(core) < 5
+
+
+def _log_free_query(uid, sid, message, answer):
+  """Log a $0 served query (vague clarification). Never charges. Fails open."""
+  try:
+    db.collection("usage_logs").add(
+      {
+        "user_id": uid,
+        "ts": firestore.SERVER_TIMESTAMP,
+        "session_id": sid,
+        "question": message,
+        "answer_chars": len(answer),
+        "prompt_tokens": 0,
+        "candidates_tokens": 0,
+        "thoughts_tokens": 0,
+        "grounding_calls": 0,
+        "latency_s": 0.0,
+        "est_cost_usd": 0.0,
+        "cached": False,
+        "attachment": None,
+        "free_reason": "vague_clarify",
+      }
+    )
+  except Exception:
+    pass
 
 
 def _charge_and_log(uid, sid, message, answer, usage, attachment, cached=False):
@@ -518,17 +641,24 @@ def _sse(payload_event: str, payload: dict) -> str:
 async def _chat_once_payload(uid, sid, msg, cache_key):
   """Run the agent to completion; returns (raw_answer, usage)."""
   t0 = time.time()
-  acc = {"prompt": 0, "cand": 0, "think": 0, "grounding": 0}
+  acc = _new_acc()
   texts: list[str] = []
+  capped = False
   async for event in runner.run_async(
     user_id=uid, session_id=sid, new_message=msg, run_config=_STREAM_CONFIG
   ):
     _accumulate_usage(event, acc)
     if not getattr(event, "partial", False):
       texts.extend(_event_texts(event))
+    if len(acc["seen"]) >= MAX_GROUNDING_QUERIES:
+      capped = True
+      break
   latency = time.time() - t0
   answer = "".join(texts)
-  usage = _usage_dict(acc, latency)
+  if capped and len(answer.strip()) < MIN_ANSWER_CHARS:
+    answer = CAPPED_MD
+    cache_key = None  # never cache the fallback
+  usage = _usage_dict(acc, latency, capped)
   if cache_key:
     _cache_put(cache_key, answer, usage)
   return answer, usage
@@ -539,8 +669,9 @@ async def _chat_sse_gen(uid, sid, message, msg, attachment, cache_key):
   # the first token arrives, so tell the client what is happening.
   yield _sse("stage", {"text": "กำลังค้นข้อมูลจากแหล่งทางการ…"})
   t0 = time.time()
-  acc = {"prompt": 0, "cand": 0, "think": 0, "grounding": 0}
+  acc = _new_acc()
   texts: list[str] = []
+  capped = False
   try:
     async for event in runner.run_async(
       user_id=uid, session_id=sid, new_message=msg, run_config=_STREAM_CONFIG
@@ -551,12 +682,18 @@ async def _chat_sse_gen(uid, sid, message, msg, attachment, cache_key):
           yield _sse("token", {"text": text})
         else:
           texts.append(text)
+      if len(acc["seen"]) >= MAX_GROUNDING_QUERIES:
+        capped = True
+        break
   except Exception as e:
     yield _sse("error", {"error": str(e)[:200]})
     return
   latency = time.time() - t0
   answer = "".join(texts)
-  usage = _usage_dict(acc, latency)
+  if capped and len(answer.strip()) < MIN_ANSWER_CHARS:
+    answer = CAPPED_MD
+    cache_key = None  # never cache the fallback
+  usage = _usage_dict(acc, latency, capped)
   if cache_key:
     _cache_put(cache_key, answer, usage)
   full = answer + FOOTER
@@ -634,6 +771,36 @@ async def chat(
   msg = genai_types.Content(role="user", parts=parts)
   wants_sse = bool(accept and "text/event-stream" in accept)
 
+  # Free path: vague questions get a template clarification (no model call,
+  # no charge). Before cache: never serve a paid spiral answer for these.
+  if attachment is None and _is_vague_question(message):
+    full = CLARIFY_MD + FOOTER
+    usage = {
+      "prompt_tokens": 0,
+      "candidates_tokens": 0,
+      "thoughts_tokens": 0,
+      "grounding_calls": 0,
+      "latency_s": 0.0,
+      "est_cost_usd": 0.0,
+      "cached": False,
+      "free": True,
+      "capped": False,
+    }
+    _log_free_query(uid, sid, message, full)
+    payload = {
+      "answer": full,
+      "session_id": sid,
+      "credits_left": user.get("credits", 0),
+      "usage": usage,
+    }
+    if wants_sse:
+
+      async def _free_only():
+        yield _sse("done", payload)
+
+      return StreamingResponse(_free_only(), media_type="text/event-stream")
+    return payload
+
   # Instant path: text-only repeats are served from cache (still charged).
   cache_key = _cache_key(_normalize_question(text)) if attachment is None else None
   if cache_key:
@@ -648,6 +815,8 @@ async def chat(
         "latency_s": 0.0,
         "est_cost_usd": 0.0,
         "cached": True,
+        "free": False,
+        "capped": False,
       }
       remaining = _charge_and_log(
         uid, sid, message, full, usage, attachment, cached=True
