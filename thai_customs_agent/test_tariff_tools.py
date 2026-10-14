@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from thai_customs_agent.tariff_tools import (
   extract_hs_codes,
+  format_candidates,
   format_verify_box,
   lookup_tariff,
   retrieve_context,
@@ -135,3 +136,20 @@ def test_verify_box_corrects_nonexistent_subdivision():
   assert "8486.90.11" in box
   assert "31 รหัส" in box
   assert "และอีก 21 รหัส" in box
+
+
+def test_format_candidates_fixture_lists_machinery_lines():
+  q = (
+    "อุปกรณ์จับยึดสำหรับติดตั้งฐาน 800G 2XFR4 OSFP ทำจากอะลูมิเนียม 95% "
+    "ใช้สำหรับเครื่องจ่ายกาว dispensing machine ส่วนการผลิตเซมิคอนดักเตอร์ "
+    "นำเข้าจากจีน เสียอากรเท่าไหร่"
+  )
+  cands = format_candidates(q)
+  assert "8486.90.49" in cands
+  assert "8479.90.90" in cands
+  assert "MFN" in cands
+  assert "ห้ามแต่งตัวเลข" not in cands  # no prompt instructions to users
+
+
+def test_format_candidates_empty_when_no_match():
+  assert format_candidates("asdfgh qwerty") == ""

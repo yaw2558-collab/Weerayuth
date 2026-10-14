@@ -211,10 +211,9 @@ def _fmt_line(line: dict) -> str:
   )
 
 
-def retrieve_context(message: str, max_lines: int = 12) -> str:
-  """ดึงพิกัดที่เกี่ยวข้องจากคำถาม เพื่อแนบเป็น context ให้โมเดล.
+def _collect(message: str, max_lines: int) -> list[dict]:
+  """Collect up to max_lines slim tariff lines for a message (deterministic).
 
-  Returns a formatted block ("" when nothing matches). Deterministic, $0.
   Fill order: explicit HS digits, then family pulls (first 3 + last line per
   mapped heading — the ".90 Other" catch-all is usually last and usually the
   answer), then keyword substring round-robin for the remaining quota.
@@ -270,13 +269,33 @@ def retrieve_context(message: str, max_lines: int = 12) -> str:
     if not progressed:
       break
     idx += 1
-  if not found:
+  return list(found.values())[:max_lines]
+
+
+def retrieve_context(message: str, max_lines: int = 12) -> str:
+  """ดึงพิกัดที่เกี่ยวข้องจากคำถาม เพื่อแนบเป็น context ให้โมเดล.
+
+  Returns a formatted block ("" when nothing matches). Deterministic, $0.
+  """
+  lines = _collect(message, max_lines)
+  if not lines:
     return ""
-  body = "\n".join(_fmt_line(line) for line in list(found.values())[:max_lines])
+  body = "\n".join(_fmt_line(line) for line in lines)
   return (
     "[ฐานพิกัดทางการ (ITD HS2022) — ใช้ตัวเลขนี้เป็นหลัก ห้ามแต่งตัวเลข]\n"
     + body
   )
+
+
+def format_candidates(message: str, max_lines: int = 8) -> str:
+  """User-facing ITD candidate lines for the breaker fallback ($0, no model).
+
+  "" when nothing matches (caller then uses the generic fallback text).
+  """
+  lines = _collect(message, max_lines)
+  if not lines:
+    return ""
+  return "\n".join(_fmt_line(line) for line in lines)
 
 
 def extract_hs_codes(text: str, limit: int = 5) -> list[str]:

@@ -47,6 +47,7 @@ from google.genai import types as genai_types
 
 from thai_customs_agent.agent import root_agent
 from thai_customs_agent.tariff_tools import extract_hs_codes
+from thai_customs_agent.tariff_tools import format_candidates
 from thai_customs_agent.tariff_tools import format_verify_box
 from thai_customs_agent.tariff_tools import retrieve_context
 
@@ -80,7 +81,7 @@ CACHE_TTL_S = 30 * 24 * 3600  # cached answers stay servable for 30 days
 # a free template clarification; real runs are breaker-capped by unique
 # search queries (built-in tools run server-side, so no callback can cap them).
 MAX_GROUNDING_QUERIES = 15  # unique web_search_queries per chat turn, then stop
-MIN_ANSWER_CHARS = 100  # below this after a breaker trip, use CAPPED_MD
+MIN_ANSWER_CHARS = 100  # below this after a breaker trip, use _breaker_fallback
 MAX_SOURCES = 8  # verifiable reference links appended per answer
 
 DISCLAIMER_SHORT = (
@@ -134,10 +135,9 @@ CLARIFY_MD = (
 
 CAPPED_MD = (
   "**ค้นข้อมูลหลายรอบแล้วยังสรุปไม่ได้**\n\n"
-  "ผมค้นจากแหล่งทางการหลายรอบแล้วแต่ข้อมูลยังไม่พอฟันธงพิกัด "
-  "ช่วยบอกรายละเอียดเพิ่มแล้วถามใหม่นะครับ เช่น ชื่อสินค้า วัสดุ "
-  "หน้าที่ใช้งาน และประเทศต้นทาง\n\n"
-  "ตัวอย่าง: \"นำเข้าเสื้อยืดผ้าฝ้ายจากจีน เสียอากรเท่าไหร่\""
+  "ผมค้นจากแหล่งทางการหลายรอบแล้วแต่ยังฟันธงพิกัดไม่ได้ "
+  "ลองถามใหม่ให้เฉพาะเจาะจงขึ้น (เช่น ชื่อสินค้า + พิกัดที่สงสัย ถ้ามี) "
+  "หรือทัก LINE OA ให้ช่วยดูครับ"
 )
 
 FOOTER = (
@@ -745,7 +745,26 @@ def _sse(payload_event: str, payload: dict) -> str:
   return f"event: {payload_event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
-async def _chat_once_payload(uid, sid, msg, cache_key):
+def _breaker_fallback(message: str) -> str:
+  """Deterministic degradation when the model burns its search budget.
+
+  Vague questions never reach here (the free path filters them first), so
+  asking for more details is always wrong — return ITD candidates instead.
+  $0, no model call. Never cached (caller clears the cache key).
+  """
+  cands = format_candidates(message)
+  if cands:
+    return (
+      "**ค้นจากแหล่งทางการหลายรอบแล้วยังฟันธงไม่ได้ — "
+      "นี่คือตัวเลือกจากฐานพิกัดทางการ (ITD HS2022):**\n\n"
+      + cands
+      + "\n\n"
+      + DISCLAIMER_SHORT
+    )
+  return CAPPED_MD + "\n\n" + DISCLAIMER_SHORT
+
+
+async def _chat_once_payload(uid, sid, msg, cache_key, message):
   """Run the agent to completion; returns (raw_answer, usage)."""
   t0 = time.time()
   acc = _new_acc()
@@ -763,7 +782,7 @@ async def _chat_once_payload(uid, sid, msg, cache_key):
   latency = time.time() - t0
   answer = "".join(texts)
   if capped and len(answer.strip()) < MIN_ANSWER_CHARS:
-    answer = CAPPED_MD
+    answer = _breaker_fallback(message)
     cache_key = None  # never cache the fallback
   else:
     answer = _finalize_answer(answer, acc)
@@ -800,7 +819,7 @@ async def _chat_sse_gen(uid, sid, message, msg, attachment, cache_key):
   latency = time.time() - t0
   answer = "".join(texts)
   if capped and len(answer.strip()) < MIN_ANSWER_CHARS:
-    answer = CAPPED_MD
+    answer = _breaker_fallback(message)
     cache_key = None  # never cache the fallback
   else:
     answer = _finalize_answer(answer, acc)
@@ -962,7 +981,7 @@ async def chat(
       headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
-  raw, usage = await _chat_once_payload(uid, sid, msg, cache_key)
+  raw, usage = await _chat_once_payload(uid, sid, msg, cache_key, message)
   full = raw + FOOTER
   remaining = _charge_and_log(uid, sid, message, full, usage, attachment)
   if remaining is None:

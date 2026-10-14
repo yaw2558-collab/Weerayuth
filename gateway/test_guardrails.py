@@ -216,8 +216,36 @@ def test_breaker_trips_stops_early_and_uses_fallback(monkeypatch):
   assert len(consumed) == main.MAX_GROUNDING_QUERIES  # stopped, not 50
   assert d["usage"]["capped"] is True
   assert d["usage"]["grounding_calls"] == main.MAX_GROUNDING_QUERIES
-  assert d["answer"] == main.CAPPED_MD + main.FOOTER  # thin answer -> fallback
+  # thin answer -> ITD-candidate fallback. REAL_Q is fully specified, so the
+  # old "give more details" text was always wrong here — the breaker means
+  # the model failed, not the user.
+  assert "8518" in d["answer"]
+  assert "ITD HS2022" in d["answer"]
+  assert main.DISCLAIMER_SHORT in d["answer"]
+  assert d["answer"].endswith(main.FOOTER)
   assert len(charges) == 1  # real spend still charged
+  assert puts == []  # fallback never cached
+
+
+def test_breaker_fallback_generic_when_no_candidates(monkeypatch):
+  _auth(monkeypatch, credits=30)
+
+  async def _spiral(**kw):
+    for i in range(main.MAX_GROUNDING_QUERIES):
+      yield _ev("x", queries=[f"g{i}"])
+
+  monkeypatch.setattr(main.runner, "run_async", _spiral)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  puts = []
+  monkeypatch.setattr(main, "_cache_put", lambda k, a, u: puts.append(k))
+
+  r = client.post("/chat", data={"message": "Form E ใช้ยังไง"}, headers=AUTH)
+  assert r.status_code == 200
+  d = r.json()
+  assert d["usage"]["capped"] is True
+  assert d["answer"] == (
+    main.CAPPED_MD + "\n\n" + main.DISCLAIMER_SHORT + main.FOOTER
+  )
   assert puts == []  # fallback never cached
 
 
