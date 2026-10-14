@@ -220,3 +220,48 @@ def test_chat_sse_agent_error_yields_error_event(monkeypatch):
 
 def test_answer_footer_has_contact_email():
   assert "mailto:yaw2558@gmail.com" in main.FOOTER
+
+
+def test_chat_attachment_text_gets_tariff_context(monkeypatch):
+  _auth(monkeypatch)
+  seen = {}
+
+  async def _capture(**kw):
+    seen.update(kw)
+    yield _ev("พิกัด 8486", usage=_usage())
+
+  monkeypatch.setattr(main.runner, "run_async", _capture)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
+
+  r = client.post(
+    "/chat",
+    data={"message": "ช่วยดูพิกัดในไฟล์ให้หน่อย"},
+    files={
+      "file": (
+        "items.txt",
+        "อุปกรณ์เซมิคอนดักเตอร์ เครื่องจักร".encode("utf-8"),
+        "text/plain",
+      )
+    },
+    headers=AUTH,
+  )
+  assert r.status_code == 200
+  sent = seen["new_message"].parts[0].text
+  assert "ฐานพิกัดทางการ" in sent
+  assert "8486" in sent
+
+
+def test_usage_row_persists_capped_flag():
+  base = {
+    "prompt_tokens": 1,
+    "candidates_tokens": 2,
+    "thoughts_tokens": 0,
+    "grounding_calls": 15,
+    "latency_s": 9.9,
+    "est_cost_usd": 0.5,
+  }
+  row = main._usage_row("u", "s", "q", "a", {**base, "capped": True}, None)
+  assert row["capped"] is True
+  assert row["grounding_calls"] == 15
+  assert main._usage_row("u", "s", "q", "a", base, None)["capped"] is False

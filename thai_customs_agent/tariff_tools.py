@@ -103,11 +103,16 @@ def _load() -> dict:
   by_head: dict[str, list] = {}
   for line in data["lines"]:
     by_head.setdefault(line["raw"][:4], []).append(line)
+  low = [
+    ((line["th"] or "").lower(), (line["en"] or "").lower(), line)
+    for line in data["lines"]
+  ]
   return {
     "meta": data["meta"],
     "lines": data["lines"],
     "by_raw": by_raw,
     "by_head": by_head,
+    "low": low,
   }
 
 
@@ -167,11 +172,7 @@ def search_tariff(keyword: str, limit: int = 10) -> dict:
   except (TypeError, ValueError):
     n = 10
   t = _load()
-  hits = [
-    line
-    for line in t["lines"]
-    if kw in line["th"].lower() or kw in line["en"].lower()
-  ]
+  hits = [line for th, en, line in t["low"] if kw in th or kw in en]
   return {
     "count": len(hits),
     "lines": [_slim(line) for line in hits[:n]],
@@ -211,12 +212,17 @@ def _fmt_line(line: dict) -> str:
   )
 
 
-def _collect(message: str, max_lines: int) -> list[dict]:
+def _collect(
+  message: str, max_lines: int, file_text: str = ""
+) -> list[dict]:
   """Collect up to max_lines slim tariff lines for a message (deterministic).
 
   Fill order: explicit HS digits, then family pulls (first 3 + last line per
   mapped heading — the ".90 Other" catch-all is usually last and usually the
   answer), then keyword substring round-robin for the remaining quota.
+  file_text feeds ONLY the Thai-keyword phases: digits in files are usually
+  prices/years/dimensions (not HS codes), and EN tokens there are mostly
+  noise (company names, addresses) that would each scan the whole book.
   """
   def _specific_first(lines):
     # Short descriptions matching the keyword are usually the most specific
@@ -230,6 +236,9 @@ def _collect(message: str, max_lines: int) -> list[dict]:
     if len(found) < max_lines:
       found.setdefault(line["hs"], line)
 
+  # Thai phases scan the message plus any attached-file text; digits and
+  # EN tokens stay message-only (see docstring).
+  scan = (message or "") if not file_text else f"{message or ''}\n{file_text}"
   # Phase 1: explicit HS digits, exact first.
   for m in _HS_RE.finditer(message or ""):
     raw = m.group(1) + m.group(2) + (m.group(3) or "")
@@ -239,7 +248,7 @@ def _collect(message: str, max_lines: int) -> list[dict]:
   # buckets cannot crowd out the right chapter).
   fam_quota = min(8, max_lines)
   for kw in _TH_KEYWORDS:
-    if kw not in (message or "") or kw not in _HEADING_MAP:
+    if kw not in scan or kw not in _HEADING_MAP:
       continue
     for head in _HEADING_MAP[kw]:
       grouped = _load()["by_head"].get(head, [])
@@ -251,7 +260,7 @@ def _collect(message: str, max_lines: int) -> list[dict]:
   # Phase 3: keyword substring round-robin for the remaining quota.
   buckets: list[list] = []
   for kw in _TH_KEYWORDS:
-    if kw in (message or ""):
+    if kw in scan:
       buckets.append(_specific_first(search_tariff(kw, limit=8).get("lines", [])))
   for tok in re.findall(r"[A-Za-z]{3,}", message or ""):
     if tok.lower() in _EN_STOP:
@@ -272,12 +281,14 @@ def _collect(message: str, max_lines: int) -> list[dict]:
   return list(found.values())[:max_lines]
 
 
-def retrieve_context(message: str, max_lines: int = 12) -> str:
-  """ดึงพิกัดที่เกี่ยวข้องจากคำถาม เพื่อแนบเป็น context ให้โมเดล.
+def retrieve_context(
+  message: str, max_lines: int = 12, file_text: str = ""
+) -> str:
+  """ดึงพิกัดที่เกี่ยวข้องจากคำถาม (+ข้อความในไฟล์แนบ) เพื่อแนบเป็น context.
 
   Returns a formatted block ("" when nothing matches). Deterministic, $0.
   """
-  lines = _collect(message, max_lines)
+  lines = _collect(message, max_lines, file_text=file_text)
   if not lines:
     return ""
   body = "\n".join(_fmt_line(line) for line in lines)

@@ -153,3 +153,20 @@ def test_format_candidates_fixture_lists_machinery_lines():
 
 def test_format_candidates_empty_when_no_match():
   assert format_candidates("asdfgh qwerty") == ""
+
+
+def test_retrieve_context_file_text_keywords():
+  # Attachment runs: the message is often vague ("พิกัดศุลกากร") with the
+  # product words inside the file (fixture xlsx spirals).
+  ctx = retrieve_context(
+    "พิกัดศุลกากร",
+    file_text="อุปกรณ์จับยึดสำหรับติดตั้งฐาน OSFP ส่วนการผลิตเซมิคอนดักเตอร์ เครื่องจ่ายกาว",
+  )
+  assert "8486.90.49" in ctx
+  assert "8479.90.90" in ctx
+
+
+def test_retrieve_context_file_text_ignores_digits_and_english():
+  # Prices/years/dimensions and company names in files must not pollute.
+  assert retrieve_context("พิกัดศุลกากร", file_text="ราคา 1234.56 บาท จำนวน 9999 ชิ้น ปี 2024") == ""
+  assert retrieve_context("พิกัดศุลกากร", file_text="LOUDSPEAKER bluetooth ACME Corp Bangkok") == ""

@@ -689,11 +689,32 @@ def _log_free_query(uid, sid, message, answer):
         "est_cost_usd": 0.0,
         "cached": False,
         "attachment": None,
+        "capped": False,
         "free_reason": "vague_clarify",
       }
     )
   except Exception:
     pass
+
+
+def _usage_row(uid, sid, message, answer, usage, attachment, cached=False) -> dict:
+  """usage_logs row (pure builder so the persisted shape is testable)."""
+  return {
+    "user_id": uid,
+    "ts": firestore.SERVER_TIMESTAMP,
+    "session_id": sid,
+    "question": message,
+    "answer_chars": len(answer),
+    "prompt_tokens": usage["prompt_tokens"],
+    "candidates_tokens": usage["candidates_tokens"],
+    "thoughts_tokens": usage["thoughts_tokens"],
+    "grounding_calls": usage["grounding_calls"],
+    "latency_s": usage["latency_s"],
+    "est_cost_usd": usage["est_cost_usd"],
+    "cached": cached,
+    "attachment": attachment,
+    "capped": bool(usage.get("capped", False)),
+  }
 
 
 def _charge_and_log(uid, sid, message, answer, usage, attachment, cached=False):
@@ -720,21 +741,7 @@ def _charge_and_log(uid, sid, message, answer, usage, attachment, cached=False):
     )
     txn.set(
       usage_ref,
-      {
-        "user_id": uid,
-        "ts": firestore.SERVER_TIMESTAMP,
-        "session_id": sid,
-        "question": message,
-        "answer_chars": len(answer),
-        "prompt_tokens": usage["prompt_tokens"],
-        "candidates_tokens": usage["candidates_tokens"],
-        "thoughts_tokens": usage["thoughts_tokens"],
-        "grounding_calls": usage["grounding_calls"],
-        "latency_s": usage["latency_s"],
-        "est_cost_usd": usage["est_cost_usd"],
-        "cached": cached,
-        "attachment": attachment,
-      },
+      _usage_row(uid, sid, message, answer, usage, attachment, cached),
     )
     return bal - CREDITS_PER_QUERY
 
@@ -862,6 +869,7 @@ async def chat(
   parts: list = []
   attachment = None
   text = message
+  file_text = ""
   if file is not None and file.filename:
     data = await file.read()
     if len(data) > MAX_FILE_MB * 1024 * 1024:
@@ -876,6 +884,7 @@ async def chat(
       }
     else:
       extracted, kind = _extract_text(file.filename, data)
+      file_text = extracted
       text = (
         f"[ไฟล์แนบ {file.filename}]\n{extracted}\n\n[คำถาม]\n{message}"
       )
@@ -884,10 +893,12 @@ async def chat(
         "size": len(data),
         "kind": kind,
       }
-  if attachment is None:
-    tctx = retrieve_context(message)
-    if tctx:
-      text = tctx + "\n\n[คำถาม]\n" + text
+  # Attachment runs used to skip retrieval entirely, so the model grounded
+  # blindly on file-only questions (fixture xlsx spirals). file_text feeds
+  # Thai-keyword phases only (no digit/EN mining — prices and company names).
+  tctx = retrieve_context(message, file_text=file_text)
+  if tctx:
+    text = tctx + "\n\n" + (text if attachment is not None else "[คำถาม]\n" + text)
   parts.append(genai_types.Part(text=text))
 
   sid = session_id or f"web-{uuid.uuid4().hex[:12]}"
