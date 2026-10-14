@@ -310,3 +310,11 @@ def test_agent_prompt_citation_rule():
   assert "รหัสย่อยที่มีจริง" in instruction
   assert "ตอบจากความรู้เดิมได้" in instruction
   assert "ไม่พบในฐาน" in instruction  # the refusal must stay forbidden
+
+
+def test_enrich_prompt_copies_verbatim():
+  from thai_customs_agent.agent import enrich_agent
+
+  instruction = enrich_agent.instruction
+  assert "คัดลอกตัวเลขตรงตัว" in instruction
+  assert "ห้ามแต่งตัวเลข" in instruction

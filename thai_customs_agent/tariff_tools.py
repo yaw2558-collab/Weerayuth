@@ -354,7 +354,7 @@ def format_candidates(message: str, max_lines: int = 8) -> str:
   return "\n".join(_fmt_line(line) for line in lines)
 
 
-def extract_hs_codes(text: str, limit: int = 5) -> list[str]:
+def extract_hs_codes(text: str, limit: int = 12) -> list[str]:
   seen: dict[str, None] = {}
   for m in _HS_FINDER.finditer(text or ""):
     if len(seen) >= limit:
@@ -399,7 +399,7 @@ def _correction_block(code: str, digits: str) -> list[str]:
 def format_verify_box(codes: list[str]) -> str:
   """กล่องตรวจเลขท้าย: เทียบพิกัดในคำตอบกับฐานทางการ + ดักรหัสแต่ง."""
   rows = []
-  for code in codes[:5]:
+  for code in codes[:12]:
     digits = "".join(ch for ch in code if ch.isdigit())
     r = lookup_tariff(code)
     if r.get("match") == "none" or "error" in r:
@@ -415,3 +415,20 @@ def format_verify_box(codes: list[str]) -> str:
   if not rows:
     return ""
   return "**ตรวจสอบอัตราจากฐานพิกัดทางการ (ITD):**\n" + "\n".join(rows)
+
+
+def format_lookup_lines(codes: list[str]) -> str:
+  """Full ITD lines for real 8-digit codes (enrichment context).
+
+  "" when none qualify (fakes and 6-digit family mentions skipped).
+  """
+  rows = []
+  for code in codes:
+    digits = "".join(ch for ch in code if ch.isdigit())
+    if len(digits) < 8:
+      continue
+    r = lookup_tariff(code)
+    if r.get("match") == "none" or "error" in r:
+      continue
+    rows.append(_fmt_line(r["lines"][0]))
+  return "\n".join(rows)

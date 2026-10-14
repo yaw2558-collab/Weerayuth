@@ -45,9 +45,11 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types as genai_types
 
+from thai_customs_agent.agent import enrich_agent
 from thai_customs_agent.agent import root_agent
 from thai_customs_agent.tariff_tools import extract_hs_codes
 from thai_customs_agent.tariff_tools import format_candidates
+from thai_customs_agent.tariff_tools import format_lookup_lines
 from thai_customs_agent.tariff_tools import format_verify_box
 from thai_customs_agent.tariff_tools import retrieve_context
 
@@ -73,7 +75,7 @@ NEW_USER_BONUS = 30  # 3 free trial queries
 RATE_LIMIT_S = 20
 MAX_FILE_MB = 20
 MAX_TEXT_CHARS = 100_000
-CACHE_VERSION = "v2"  # v2: machinery retrieval + verify-box corrections
+CACHE_VERSION = "v3"  # v3: two-pass rate enrichment
 CACHE_TTL_S = 30 * 24 * 3600  # cached answers stay servable for 30 days
 
 # Guardrails (2026-10-12): vague questions used to spiral into dozens of
@@ -82,6 +84,13 @@ CACHE_TTL_S = 30 * 24 * 3600  # cached answers stay servable for 30 days
 # search queries (built-in tools run server-side, so no callback can cap them).
 MAX_GROUNDING_QUERIES = 15  # unique web_search_queries per chat turn, then stop
 MIN_ANSWER_CHARS = 100  # below this after a breaker trip, use _breaker_fallback
+_REFUSAL_MARKERS = (
+  "ดูที่กล่องตรวจสอบ",
+  "ไม่ปรากฏ",
+  "ไม่สามารถระบุ",
+  "ไม่พบข้อมูลอัตร",
+  "ไม่พบพิกัด",
+)
 MAX_SOURCES = 8  # verifiable reference links appended per answer
 
 DISCLAIMER_SHORT = (
@@ -156,6 +165,9 @@ firebase_admin.initialize_app(options={"projectId": PROJECT})
 db = firestore.client()
 session_service = InMemorySessionService()
 runner = Runner(agent=root_agent, app_name=APP_NAME, session_service=session_service)
+enrich_runner = Runner(
+  agent=enrich_agent, app_name=APP_NAME, session_service=session_service
+)
 # SSE mode yields partial text chunks (typewriter) + final aggregated events.
 _STREAM_CONFIG = RunConfig(streaming_mode=StreamingMode.SSE)
 
@@ -752,6 +764,19 @@ def _sse(payload_event: str, payload: dict) -> str:
   return f"event: {payload_event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
+async def _ensure_session(uid: str, sid: str) -> None:
+  try:
+    sess = await session_service.get_session(
+      app_name=APP_NAME, user_id=uid, session_id=sid
+    )
+  except Exception:
+    sess = None
+  if sess is None:
+    await session_service.create_session(
+      app_name=APP_NAME, user_id=uid, session_id=sid
+    )
+
+
 def _breaker_fallback(message: str) -> str:
   """Deterministic degradation when the model burns its search budget.
 
@@ -769,6 +794,40 @@ def _breaker_fallback(message: str) -> str:
       + DISCLAIMER_SHORT
     )
   return CAPPED_MD + "\n\n" + DISCLAIMER_SHORT
+
+
+async def _maybe_enrich(uid, sid, message, answer, acc) -> str:
+  """Second pass: fill refused rates/permits with base data (no grounding).
+
+  Runs only when the answer refuses numbers it cited codes for; fails open
+  to the original answer. Pass-2 tokens accumulate into acc (honest cost).
+  """
+  if not any(m in answer for m in _REFUSAL_MARKERS):
+    return answer
+  block = format_lookup_lines(extract_hs_codes(answer))
+  if not block:
+    return answer
+  prompt = (
+    f"[คำถาม]\n{message}\n\n[คำตอบเดิม]\n{answer}\n\n"
+    "[ข้อมูลพิกัดจากฐาน ITD — คัดลอกตัวเลขตรงตัว]\n" + block
+  )
+  try:
+    sid2 = f"{sid}-enrich"
+    await _ensure_session(uid, sid2)
+    msg2 = genai_types.Content(
+      role="user", parts=[genai_types.Part(text=prompt)]
+    )
+    texts: list[str] = []
+    async for event in enrich_runner.run_async(
+      user_id=uid, session_id=sid2, new_message=msg2
+    ):
+      _accumulate_usage(event, acc)
+      if not getattr(event, "partial", False):
+        texts.extend(_event_texts(event))
+    final = "".join(texts).strip()
+    return final if len(final) >= MIN_ANSWER_CHARS else answer
+  except Exception:
+    return answer
 
 
 async def _chat_once_payload(uid, sid, msg, cache_key, message):
@@ -792,6 +851,7 @@ async def _chat_once_payload(uid, sid, msg, cache_key, message):
     answer = _breaker_fallback(message)
     cache_key = None  # never cache the fallback
   else:
+    answer = await _maybe_enrich(uid, sid, message, answer, acc)
     answer = _finalize_answer(answer, acc)
   usage = _usage_dict(acc, latency, capped)
   if cache_key:
@@ -829,6 +889,7 @@ async def _chat_sse_gen(uid, sid, message, msg, attachment, cache_key):
     answer = _breaker_fallback(message)
     cache_key = None  # never cache the fallback
   else:
+    answer = await _maybe_enrich(uid, sid, message, answer, acc)
     answer = _finalize_answer(answer, acc)
   usage = _usage_dict(acc, latency, capped)
   if cache_key:
@@ -902,16 +963,7 @@ async def chat(
   parts.append(genai_types.Part(text=text))
 
   sid = session_id or f"web-{uuid.uuid4().hex[:12]}"
-  try:
-    sess = await session_service.get_session(
-      app_name=APP_NAME, user_id=uid, session_id=sid
-    )
-  except Exception:
-    sess = None
-  if sess is None:
-    await session_service.create_session(
-      app_name=APP_NAME, user_id=uid, session_id=sid
-    )
+  await _ensure_session(uid, sid)
 
   msg = genai_types.Content(role="user", parts=parts)
   wants_sse = bool(accept and "text/event-stream" in accept)

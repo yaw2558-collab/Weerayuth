@@ -265,3 +265,83 @@ def test_usage_row_persists_capped_flag():
   assert row["capped"] is True
   assert row["grounding_calls"] == 15
   assert main._usage_row("u", "s", "q", "a", base, None)["capped"] is False
+
+
+def test_chat_enriches_refused_rates(monkeypatch):
+  _auth(monkeypatch)
+  monkeypatch.setattr(
+    main.runner,
+    "run_async",
+    _fake_run(
+      [_ev("พิกัด 7326.90.99 ดูที่กล่องตรวจสอบด้านล่าง", usage=_usage())]
+    ),
+  )
+  seen = {}
+
+  async def _enrich(**kw):
+    seen.update(kw)
+    yield _ev(
+      "พิกัด 7326.90.99 MFN 10% เติมแล้ว " + "ข้อมูลอัตราครบถ้วน " * 10,
+      usage=_usage(),
+    )
+
+  monkeypatch.setattr(main.enrich_runner, "run_async", _enrich)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
+
+  r = client.post(
+    "/chat", data={"message": "ชั้นเตาอบเหล็กนำเข้าจากจีน"}, headers=AUTH
+  )
+  assert r.status_code == 200
+  d = r.json()
+  assert "เติมแล้ว" in d["answer"]
+  prompt = seen["new_message"].parts[0].text
+  assert "7326.90.99" in prompt and "MFN 10%" in prompt
+  assert d["usage"]["prompt_tokens"] == 200  # both passes counted
+
+
+def test_chat_skips_enrich_without_refusal(monkeypatch):
+  _auth(monkeypatch)
+  monkeypatch.setattr(
+    main.runner,
+    "run_async",
+    _fake_run([_ev("พิกัด 7326.90.99 MFN 10%", usage=_usage())]),
+  )
+
+  def _boom(**kw):
+    raise AssertionError("enrich must not run without refusal")
+
+  monkeypatch.setattr(main.enrich_runner, "run_async", _boom)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
+
+  r = client.post(
+    "/chat", data={"message": "ชั้นเตาอบเหล็กนำเข้าจากจีน"}, headers=AUTH
+  )
+  assert r.status_code == 200
+  assert "MFN 10%" in r.json()["answer"]
+
+
+def test_chat_enrich_fails_open(monkeypatch):
+  _auth(monkeypatch)
+  monkeypatch.setattr(
+    main.runner,
+    "run_async",
+    _fake_run(
+      [_ev("พิกัด 7326.90.99 ดูที่กล่องตรวจสอบด้านล่าง", usage=_usage())]
+    ),
+  )
+
+  async def _failing(**kw):
+    raise RuntimeError("vertex 500")
+    yield  # pragma: no cover — makes this an async generator
+
+  monkeypatch.setattr(main.enrich_runner, "run_async", _failing)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
+
+  r = client.post(
+    "/chat", data={"message": "ชั้นเตาอบเหล็กนำเข้าจากจีน"}, headers=AUTH
+  )
+  assert r.status_code == 200
+  assert "ดูที่กล่องตรวจสอบด้านล่าง" in r.json()["answer"]

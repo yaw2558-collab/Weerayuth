@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from thai_customs_agent.tariff_tools import (
   extract_hs_codes,
   format_candidates,
+  format_lookup_lines,
   format_verify_box,
   lookup_tariff,
   retrieve_context,
@@ -187,3 +188,12 @@ def test_retrieve_context_lists_valid_subdivisions():
   assert "8486.90.11" in line and "8486.90.49" in line
   assert "8486.90.99" not in line and "8486.90.90" not in line
   assert "2106.90 มีรหัสย่อยจริง" not in ctx  # substring noise stays out
+
+
+def test_format_lookup_lines_skips_fakes_and_families():
+  out = format_lookup_lines(["8486.90.99", "0901.21", "0901.21.20", "7326.90.99"])
+  assert "8486.90.99" not in out
+  assert "0901.21.20" in out and "90%" in out
+  assert "7326.90.99" in out and "MFN 10%" in out
+  assert format_lookup_lines(["9999.99.99"]) == ""
+  assert format_lookup_lines([]) == ""
