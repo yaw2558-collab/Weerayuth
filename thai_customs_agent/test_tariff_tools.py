@@ -170,3 +170,20 @@ def test_retrieve_context_file_text_ignores_digits_and_english():
   # Prices/years/dimensions and company names in files must not pollute.
   assert retrieve_context("พิกัดศุลกากร", file_text="ราคา 1234.56 บาท จำนวน 9999 ชิ้น ปี 2024") == ""
   assert retrieve_context("พิกัดศุลกากร", file_text="LOUDSPEAKER bluetooth ACME Corp Bangkok") == ""
+
+
+def test_retrieve_context_lists_valid_subdivisions():
+  # Regression: the model invented 8486.90.99 (".99 = Other" overgeneralized
+  # from headings like 7326.90). Pre-answer valid lists constrain it.
+  ctx = retrieve_context(
+    "อุปกรณ์จับยึดสำหรับติดตั้งฐาน OSFP ส่วนการผลิตเซมิคอนดักเตอร์ เครื่องจ่ายกาว"
+  )
+  assert "รหัสย่อยที่มีจริง" in ctx
+  assert "8486.90 มีรหัสย่อยจริง 31 รหัส" in ctx
+  assert "8479.90 มีรหัสย่อยจริง 3 รหัส" in ctx
+  line = next(
+    ln for ln in ctx.splitlines() if ln.startswith("8486.90 มีรหัสย่อยจริง")
+  )
+  assert "8486.90.11" in line and "8486.90.49" in line
+  assert "8486.90.99" not in line and "8486.90.90" not in line
+  assert "2106.90 มีรหัสย่อยจริง" not in ctx  # substring noise stays out

@@ -257,6 +257,7 @@ def _collect(
         if len(found) >= fam_quota:
           break
         _take(_slim(line))
+  priority = len(found)  # phases 1+2 lines: higher-evidence families
   # Phase 3: keyword substring round-robin for the remaining quota.
   buckets: list[list] = []
   for kw in _TH_KEYWORDS:
@@ -278,7 +279,48 @@ def _collect(
     if not progressed:
       break
     idx += 1
-  return list(found.values())[:max_lines]
+  return list(found.values())[:max_lines], priority
+
+
+_FAM_PRIORITY_CAP = 6  # max expanded families from digits/mapped pulls
+_FAM_SUBSTRING_CAP = 3  # fallback when no priority family exists
+
+
+def _valid_subdivisions(collected: list[dict], priority: int) -> str:
+  """Exhaustive real-subdivision lists for the main collected families.
+
+  The model overgeneralizes ".90/.99 = Other" across headings (e.g. inventing
+  8486.90.99 from 7326.90.99). Showing the actual lists pre-answer constrains
+  it to real codes. Priority families (explicit digits + mapped pulls, which
+  include the parts tails) are all expanded; substring-only families are
+  noise-prone (beverages matching "เครื่อง") and expand only as a fallback.
+  """
+  stats: dict[str, list] = {}  # prefix -> [total, first_idx, priority_lines]
+  for i, ln in enumerate(collected):
+    p = ln["hs"][:7]
+    s = stats.setdefault(p, [0, i, 0])
+    s[0] += 1
+    if i < priority:
+      s[2] += 1
+  pri = [p for p in stats if stats[p][2] > 0]
+  pri.sort(key=lambda p: (-stats[p][2], -stats[p][0], stats[p][1]))
+  if pri:
+    ranked = pri[:_FAM_PRIORITY_CAP]
+  else:
+    ranked = sorted(stats, key=lambda p: (-stats[p][0], stats[p][1]))[
+      :_FAM_SUBSTRING_CAP
+    ]
+  all_lines = _load()["lines"]
+  blocks = []
+  for prefix in ranked:
+    fam = [ln["c"] for ln in all_lines if ln["c"].startswith(prefix)]
+    blocks.append(f"{prefix} มีรหัสย่อยจริง {len(fam)} รหัส: " + ", ".join(fam))
+  if not blocks:
+    return ""
+  return (
+    "[รหัสย่อยที่มีจริงในฐาน — อ้างได้เฉพาะรหัสเหล่านี้ ห้ามแต่งเลขท้ายอื่น]\n"
+    + "\n".join(blocks)
+  )
 
 
 def retrieve_context(
@@ -288,10 +330,13 @@ def retrieve_context(
 
   Returns a formatted block ("" when nothing matches). Deterministic, $0.
   """
-  lines = _collect(message, max_lines, file_text=file_text)
+  lines, priority = _collect(message, max_lines, file_text=file_text)
   if not lines:
     return ""
   body = "\n".join(_fmt_line(line) for line in lines)
+  fams = _valid_subdivisions(lines, priority)
+  if fams:
+    body += "\n" + fams
   return (
     "[ฐานพิกัดทางการ (ITD HS2022) — ใช้ตัวเลขนี้เป็นหลัก ห้ามแต่งตัวเลข]\n"
     + body
@@ -303,7 +348,7 @@ def format_candidates(message: str, max_lines: int = 8) -> str:
 
   "" when nothing matches (caller then uses the generic fallback text).
   """
-  lines = _collect(message, max_lines)
+  lines, _ = _collect(message, max_lines)
   if not lines:
     return ""
   return "\n".join(_fmt_line(line) for line in lines)
