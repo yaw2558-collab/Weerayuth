@@ -72,7 +72,7 @@ NEW_USER_BONUS = 30  # 3 free trial queries
 RATE_LIMIT_S = 20
 MAX_FILE_MB = 20
 MAX_TEXT_CHARS = 100_000
-CACHE_VERSION = "v1"  # bump to invalidate answer_cache (e.g. model change)
+CACHE_VERSION = "v2"  # v2: machinery retrieval + verify-box corrections
 CACHE_TTL_S = 30 * 24 * 3600  # cached answers stay servable for 30 days
 
 # Guardrails (2026-10-12): vague questions used to spiral into dozens of

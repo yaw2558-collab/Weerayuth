@@ -110,3 +110,28 @@ def test_verify_box_real_and_fake_codes():
   assert format_verify_box([]) == ""
   assert format_verify_box(["0901.21"]) == ""  # real family, not a claim
   assert "ไม่พบ" in format_verify_box(["9999.99"])  # fake family still warns
+
+
+def test_retrieve_context_fixture_pulls_machinery_families():
+  # Regression (fixture จับยึดฐาน OSFP): industrial-goods questions used to
+  # drown in EN-substring noise (ginseng, surfactants...) with zero Ch 84-85
+  # lines, so the model invented 8486.90.90.
+  q = (
+    "อุปกรณ์จับยึดสำหรับติดตั้งฐาน 800G 2XFR4 OSFP ทำจากอะลูมิเนียม 95% "
+    "ใช้สำหรับเครื่องจ่ายกาว dispensing machine ส่วนการผลิตเซมิคอนดักเตอร์ "
+    "นำเข้าจากจีน เสียอากรเท่าไหร่"
+  )
+  ctx = retrieve_context(q)
+  assert "8486.10.10" in ctx  # family pull: head of 8486
+  assert "8486.90.49" in ctx  # family pull: tail of 8486
+  assert "8479.90.90" in ctx  # family pull: tail of 8479 (parts answer)
+
+
+def test_verify_box_corrects_nonexistent_subdivision():
+  # 8486.90.90 looks plausible but does not exist in AHTN — the box must
+  # correct with the real subdivision list, not just flag it.
+  box = format_verify_box(["8486.90.90"])
+  assert "ไม่มีรหัสนี้" in box
+  assert "8486.90.11" in box
+  assert "31 รหัส" in box
+  assert "และอีก 21 รหัส" in box

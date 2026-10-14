@@ -37,6 +37,10 @@ _TH_KEYWORDS = (
   "ผง", "เม็ด", "แผ่น", "ม้วน", "ทอ", "ถัก", "เย็บ", "สำเร็จรูป", "ชิ้นส่วน",
   "อะไหล่", "มือสอง", "พลาสติก", "เหล็ก", "อลูมิเนียม", "ทองแดง",
   "เซรามิก", "หนัง",
+  # Machinery / industrial goods (Ch 84-85 recall): without these, parts
+  # questions drown in EN-substring noise and the model invents codes.
+  # Order matters: specific first, generic "เครื่อง" last (family quota).
+  "เซมิคอนดักเตอร์", "เครื่อง",
 )
 
 _EN_STOP = frozenset(
@@ -87,6 +91,8 @@ _HEADING_MAP = {
   "ข้าว": ("1006",), "น้ำตาล": ("1701",), "ปุ๋ย": ("3105",),
   "ผลไม้": ("0810",), "ทุเรียน": ("0810",),
   "ผ้าใบ": ("5901",),
+  "เซมิคอนดักเตอร์": ("8486",),
+  "เครื่อง": ("8479",),
 }
 
 
@@ -282,6 +288,39 @@ def extract_hs_codes(text: str, limit: int = 5) -> list[str]:
   return list(seen)
 
 
+_CORRECTION_SHOW = 10  # real subdivisions listed when an answer cites a code that does not exist
+
+
+def _compact_rate(line: dict) -> str:
+  if line["mfn_note"] == "exempt":
+    return "ยกเว้นอากร"
+  mfn = line["mfn"]
+  if mfn is not None:
+    return f"{mfn}%"
+  return line["mfn_note"] or "ไม่ระบุ"
+
+
+def _correction_block(code: str, digits: str) -> list[str]:
+  """Correction for an 8-digit code missing from the book: list the real
+  subdivisions under its 6-digit family so the user can pick correctly."""
+  fam = lookup_tariff(digits[:6])
+  lines = fam.get("lines", [])
+  if fam.get("match") == "none" or not lines:
+    return [f"- {code}: ไม่พบในฐานพิกัดทางการ (ITD) — โปรดตรวจสอบ"]
+  total = fam.get("count", len(lines))
+  head = f"{digits[:4]}.{digits[4:6]}"
+  rows = [
+    f"- {code}: ไม่มีรหัสนี้ในฐานพิกัดทางการ (ITD HS2022)",
+    f"  รหัสที่มีจริงภายใต้ {head} ({total} รหัส):",
+  ]
+  for ln in lines[:_CORRECTION_SHOW]:
+    desc = ln["th"] or ln["en"]
+    rows.append(f"  - {ln['hs']} | {desc} | MFN {_compact_rate(ln)}")
+  if total > _CORRECTION_SHOW:
+    rows.append(f"  - ... และอีก {total - _CORRECTION_SHOW} รหัส")
+  return rows
+
+
 def format_verify_box(codes: list[str]) -> str:
   """กล่องตรวจเลขท้าย: เทียบพิกัดในคำตอบกับฐานทางการ + ดักรหัสแต่ง."""
   rows = []
@@ -289,7 +328,10 @@ def format_verify_box(codes: list[str]) -> str:
     digits = "".join(ch for ch in code if ch.isdigit())
     r = lookup_tariff(code)
     if r.get("match") == "none" or "error" in r:
-      rows.append(f"- {code}: ไม่พบในฐานพิกัดทางการ (ITD) — โปรดตรวจสอบ")
+      if len(digits) >= 8:
+        rows.extend(_correction_block(code, digits))
+      else:
+        rows.append(f"- {code}: ไม่พบในฐานพิกัดทางการ (ITD) — โปรดตรวจสอบ")
       continue
     if len(digits) < 8:
       continue  # real 6-digit family mention, not a rate claim — skip noise
