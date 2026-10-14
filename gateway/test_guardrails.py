@@ -297,3 +297,16 @@ def test_agent_prompt_has_search_budget():
   from thai_customs_agent.agent import root_agent
 
   assert "ไม่เกิน 4 ครั้ง" in root_agent.instruction
+
+
+def test_agent_prompt_citation_rule():
+  # Strict-only ("cite attached codes or refuse") made the model refuse all
+  # 9 fixture items; invented-only lets fakes through. The rule must be both:
+  # check the attached valid lists first, parametric allowed when the family
+  # is absent (the verify box validates against the full base).
+  from thai_customs_agent.agent import root_agent
+
+  instruction = root_agent.instruction
+  assert "รหัสย่อยที่มีจริง" in instruction
+  assert "ตอบจากความรู้เดิมได้" in instruction
+  assert "ไม่พบในฐาน" in instruction  # the refusal must stay forbidden
