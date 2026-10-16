@@ -316,6 +316,21 @@ def test_agent_prompt_citation_rule():
   assert "ไม่พบในฐาน" in instruction  # the refusal must stay forbidden
 
 
+def test_agent_prompt_attachment_codes_are_not_thai():
+  # Regression (prod 2026-10-16): the model headlined 8517.79.50 straight
+  # from a supplier xlsx (Chinese HS 8517795000) though it is not in the
+  # Thai ITD base. Attachment codes must never verify a tail nor headline
+  # as the Thai answer — cite verified digits only (6 when the tail is
+  # unverified, full 8 when verified), no foreign-code labeling required.
+  from thai_customs_agent.agent import root_agent
+
+  instruction = root_agent.instruction
+  assert "มักเป็น HS จีน" in instruction
+  assert "ใช้ยืนยันเลขท้ายไม่ได้" in instruction
+  assert "อ้างเฉพาะตัวเลขที่ยืนยันแล้ว" in instruction
+  assert "ตอบเต็ม 8 หลักได้เลย" in instruction
+
+
 def test_agent_prompt_unverified_tail_points_to_customs():
   # An unverifiable 7-8 tail must degrade to 6 digits + official lookup,
   # never a guessed 8-digit code presented as the answer.

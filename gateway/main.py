@@ -75,7 +75,7 @@ NEW_USER_BONUS = 30  # 3 free trial queries
 RATE_LIMIT_S = 20
 MAX_FILE_MB = 20
 MAX_TEXT_CHARS = 100_000
-CACHE_VERSION = "v4"  # v4: never invent digits 7-8; unverified tail -> 6 digits + customs.go.th lookup
+CACHE_VERSION = "v5"  # v5: attachment codes never verify a tail; cite verified digits only (6 or full 8)
 CACHE_TTL_S = 30 * 24 * 3600  # cached answers stay servable for 30 days
 
 # Guardrails (2026-10-12): vague questions used to spiral into dozens of
