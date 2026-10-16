@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from thai_customs_agent.tariff_tools import (
+  attachment_code_verdicts,
   extract_hs_codes,
   format_candidates,
   format_lookup_lines,
@@ -188,6 +189,44 @@ def test_retrieve_context_lists_valid_subdivisions():
   assert "8486.90.11" in line and "8486.90.49" in line
   assert "8486.90.99" not in line and "8486.90.90" not in line
   assert "2106.90 มีรหัสย่อยจริง" not in ctx  # substring noise stays out
+
+
+def test_attachment_verdicts_reject_foreign_code():
+  # Regression (prod 2026-10-16): supplier xlsx headlined Chinese HS
+  # 8517795000 as the Thai answer. File HS claims get a deterministic
+  # per-code verdict — fakes are banned pre-answer.
+  out = attachment_code_verdicts("HS CODE 8517795000")
+  assert "ตรวจรหัสในไฟล์แนบ" in out
+  assert "8517.79.50" in out
+  assert "ไม่มีรหัสนี้ในฐาน" in out
+  assert "ห้ามอ้าง" in out
+  assert "อ้างได้แค่ 6 หลัก" in out
+
+
+def test_attachment_verdicts_confirm_real_code():
+  out = attachment_code_verdicts("พิกัด 0901.21.20")
+  assert "0901.21.20" in out
+  assert "มีในฐานพิกัดไทย" in out
+  assert "90%" in out
+
+
+def test_attachment_verdicts_empty_without_codes():
+  # Phone numbers and plain words are not HS claims (cue-gated runs only).
+  assert attachment_code_verdicts("อุปกรณ์เซมิคอนดักเตอร์ โทร 0812345678") == ""
+  assert attachment_code_verdicts("") == ""
+
+
+def test_retrieve_context_fiber_module_pulls_8517():
+  # Regression (prod 2026-10-16): the transceiver question pulled pure
+  # noise (even shrimp) with zero Ch 85 lines, so the model clung to the
+  # attachment's Chinese code.
+  q = (
+    "โมดูลรับส่งสัญญาณใยแก้วนำแสง ไม่รวมตัวเรือน "
+    "OPTICAL TRANSCEIVER MODULE นำเข้าจากจีน เสียอากรเท่าไหร่"
+  )
+  ctx = retrieve_context(q)
+  assert "8517" in ctx
+  assert "8517.79 มีรหัสย่อยจริง 9 รหัส" in ctx
 
 
 def test_format_lookup_lines_skips_fakes_and_families():

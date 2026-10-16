@@ -47,6 +47,7 @@ from google.genai import types as genai_types
 
 from thai_customs_agent.agent import enrich_agent
 from thai_customs_agent.agent import root_agent
+from thai_customs_agent.tariff_tools import attachment_code_verdicts
 from thai_customs_agent.tariff_tools import extract_hs_codes
 from thai_customs_agent.tariff_tools import format_candidates
 from thai_customs_agent.tariff_tools import format_lookup_lines
@@ -75,7 +76,7 @@ NEW_USER_BONUS = 30  # 3 free trial queries
 RATE_LIMIT_S = 20
 MAX_FILE_MB = 20
 MAX_TEXT_CHARS = 100_000
-CACHE_VERSION = "v5"  # v5: attachment codes never verify a tail; cite verified digits only (6 or full 8)
+CACHE_VERSION = "v6"  # v6: attachment code verdicts + comms recall (รับส่ง/ใยแก้ว→8517)
 CACHE_TTL_S = 30 * 24 * 3600  # cached answers stay servable for 30 days
 
 # Guardrails (2026-10-12): vague questions used to spiral into dozens of
@@ -958,6 +959,12 @@ async def chat(
   # blindly on file-only questions (fixture xlsx spirals). file_text feeds
   # Thai-keyword phases only (no digit/EN mining — prices and company names).
   tctx = retrieve_context(message, file_text=file_text)
+  if file_text:
+    # Supplier files often carry foreign HS codes the model would headline
+    # as the Thai answer — ban fakes with a deterministic per-code verdict.
+    verdicts = attachment_code_verdicts(file_text)
+    if verdicts:
+      tctx = f"{tctx}\n\n{verdicts}" if tctx else verdicts
   if tctx:
     text = tctx + "\n\n" + (text if attachment is not None else "[คำถาม]\n" + text)
   parts.append(genai_types.Part(text=text))

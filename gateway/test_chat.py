@@ -252,6 +252,39 @@ def test_chat_attachment_text_gets_tariff_context(monkeypatch):
   assert "8486" in sent
 
 
+def test_chat_attachment_code_verdict_attached(monkeypatch):
+  # File HS claims get a deterministic per-code ITD verdict in the prompt —
+  # fakes are banned before the model answers (Chinese-HS headline, prod).
+  _auth(monkeypatch)
+  seen = {}
+
+  async def _capture(**kw):
+    seen.update(kw)
+    yield _ev("พิกัด 8517.79", usage=_usage())
+
+  monkeypatch.setattr(main.runner, "run_async", _capture)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
+
+  r = client.post(
+    "/chat",
+    data={"message": "ช่วยดูพิกัดในไฟล์ให้หน่อย"},
+    files={
+      "file": (
+        "hs.txt",
+        "HS CODE 8517795000".encode("utf-8"),
+        "text/plain",
+      )
+    },
+    headers=AUTH,
+  )
+  assert r.status_code == 200
+  sent = seen["new_message"].parts[0].text
+  assert "ตรวจรหัสในไฟล์แนบ" in sent
+  assert "8517.79.50" in sent
+  assert "ห้ามอ้าง" in sent
+
+
 def test_usage_row_persists_capped_flag():
   base = {
     "prompt_tokens": 1,

@@ -41,6 +41,10 @@ _TH_KEYWORDS = (
   # questions drown in EN-substring noise and the model invents codes.
   # Order matters: specific first, generic "เครื่อง" last (family quota).
   "เซมิคอนดักเตอร์", "เครื่อง",
+  # Comms / fiber optics (Ch 8517 recall): transceiver questions pulled
+  # pure noise (even shrimp) with zero Ch 85 lines, so the model clung to
+  # the attachment's foreign code.
+  "รับส่ง", "ใยแก้ว",
 )
 
 _EN_STOP = frozenset(
@@ -93,6 +97,8 @@ _HEADING_MAP = {
   "ผ้าใบ": ("5901",),
   "เซมิคอนดักเตอร์": ("8486",),
   "เครื่อง": ("8479",),
+  "รับส่ง": ("8517",),
+  "ใยแก้ว": ("8517",),
 }
 
 
@@ -352,6 +358,65 @@ def format_candidates(message: str, max_lines: int = 8) -> str:
   if not lines:
     return ""
   return "\n".join(_fmt_line(line) for line in lines)
+
+
+# HS-claim cues in files: dotted codes match anywhere, but bare digit runs
+# need a cue word (HS CODE / พิกัด / 税号 / 编码 ...) — otherwise phone
+# numbers and amounts would each demand a verdict. The ASCII lookbehind
+# keeps "barcode <digits>" out without breaking CJK cues (no \b there).
+_FILE_CLAIM_RE = re.compile(
+  r"(?<![A-Za-z])(?:hs|code|พิกัด|税号|编码|tariff|customs)[^\d]{0,10}(\d{8,12})",
+  re.IGNORECASE,
+)
+_VERDICT_SHOW = 5
+
+
+def _dot8(raw8: str) -> str:
+  return f"{raw8[:4]}.{raw8[4:6]}.{raw8[6:8]}"
+
+
+def attachment_code_verdicts(file_text: str) -> str:
+  """Per-code ITD verdicts for HS claims inside an attached file ($0).
+
+  Supplier forms/invoices often carry foreign HS codes (e.g. Chinese
+  8517795000) that the model would otherwise headline as the Thai answer.
+  Each claim is checked against the base up front: real codes come back
+  with their line, fakes come back banned. "" when no claims found.
+  """
+  seen: dict[str, None] = {}
+
+  def _take(digits: str):
+    if len(digits) >= 8 and len(seen) < _VERDICT_SHOW:
+      seen.setdefault(digits[:8])
+
+  for m in _HS_FINDER.finditer(file_text or ""):
+    _take("".join(ch for ch in m.group(0) if ch.isdigit()))
+  for m in _FILE_CLAIM_RE.finditer(file_text or ""):
+    _take(m.group(1))
+  if not seen:
+    return ""
+  rows = []
+  for raw8 in seen:
+    code = _dot8(raw8)
+    r = lookup_tariff(raw8)
+    if r.get("match") == "none" or "error" in r:
+      fam = lookup_tariff(raw8[:6])
+      if fam.get("match") == "none" or "error" in fam:
+        rows.append(
+          f"- {code}: ไม่มีในฐานพิกัดไทย (ITD HS2022) ห้ามอ้างเป็นพิกัดไทย"
+        )
+      else:
+        n = fam.get("count", len(fam.get("lines", [])))
+        rows.append(
+          f"- {code}: ไม่มีรหัสนี้ในฐาน (ตระกูล {raw8[:4]}.{raw8[4:6]} "
+          f"มีจริง {n} รหัสย่อย — อ้างได้แค่ 6 หลัก)"
+        )
+    else:
+      rows.append(f"- {code}: มีในฐานพิกัดไทย → " + _fmt_line(r["lines"][0]))
+  return (
+    "[ตรวจรหัสในไฟล์แนบ — ยึดผลนี้ รหัสที่ไม่มีในฐานห้ามอ้างเป็นพิกัดไทย]\n"
+    + "\n".join(rows)
+  )
 
 
 def extract_hs_codes(text: str, limit: int = 12) -> list[str]:
