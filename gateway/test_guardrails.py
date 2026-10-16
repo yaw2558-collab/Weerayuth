@@ -300,16 +300,30 @@ def test_agent_prompt_has_search_budget():
 
 
 def test_agent_prompt_citation_rule():
-  # Strict-only ("cite attached codes or refuse") made the model refuse all
-  # 9 fixture items; invented-only lets fakes through. The rule must be both:
-  # check the attached valid lists first, parametric allowed when the family
-  # is absent (the verify box validates against the full base).
+  # Split by granularity. Family-level (6-digit) reasoning from prior
+  # knowledge stays allowed when the family is absent (strict-only refused
+  # all 9 fixture items), but digits 7-8 must never be invented — they must
+  # come from the attached ITD context or a customs.go.th page read via
+  # URL Context, else answer 6 digits + point at the Customs website lookup.
+  # The verify box still validates every cited code against the full base.
   from thai_customs_agent.agent import root_agent
 
   instruction = root_agent.instruction
   assert "รหัสย่อยที่มีจริง" in instruction
-  assert "ตอบจากความรู้เดิมได้" in instruction
+  assert "ความรู้เดิมได้เฉพาะระดับ 6 หลัก" in instruction
+  assert "ห้ามแต่งเลขท้ายหลักที่ 7-8" in instruction
+  assert "ตรวจรหัสย่อยที่เว็บกรมศุลกากร" in instruction
   assert "ไม่พบในฐาน" in instruction  # the refusal must stay forbidden
+
+
+def test_agent_prompt_unverified_tail_points_to_customs():
+  # An unverifiable 7-8 tail must degrade to 6 digits + official lookup,
+  # never a guessed 8-digit code presented as the answer.
+  from thai_customs_agent.agent import root_agent
+
+  instruction = root_agent.instruction
+  assert "ห้ามสุ่มเลขท้ายหลักที่ 7-8" in instruction
+  assert "ตอบแค่ 6 หลัก" in instruction
 
 
 def test_enrich_prompt_copies_verbatim():
