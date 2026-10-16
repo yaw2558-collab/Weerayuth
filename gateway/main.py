@@ -469,7 +469,7 @@ def checkout(body: CheckoutIn, authorization: str | None = Header(default=None))
   try:
     session = stripe.checkout.Session.create(
       mode="payment",
-      payment_method_types=["card", "promptpay"],
+      allowed_payment_method_types=["card", "promptpay"],
       line_items=[{"price": body.price_id, "quantity": 1}],
       metadata={"uid": uid, "credits": info["credits"], "price_id": body.price_id},
       success_url=f"{APP_URL}/?topup=success&thb={info['thb']}",

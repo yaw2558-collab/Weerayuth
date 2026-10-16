@@ -190,7 +190,10 @@ def test_checkout_offers_promptpay(monkeypatch):
     headers={"Authorization": "Bearer [REDACTED]"},
   )
   assert r.status_code == 200
-  assert calls["payment_method_types"] == ["card", "promptpay"]
+  # Stripe removed `payment_method_types` from Checkout Session create
+  # (prod 502, 2026-10-16) — `allowed_payment_method_types` is the filter now.
+  assert "payment_method_types" not in calls
+  assert calls["allowed_payment_method_types"] == ["card", "promptpay"]
 
 
 def test_webhook_async_payment_succeeded_grants(monkeypatch):
