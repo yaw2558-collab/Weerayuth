@@ -32,26 +32,37 @@ def test_homepage_links_blog():
   assert 'nav_blog: "博客"' in js
 
 
+ARTICLES = [
+  "hs-code-lookup-guide.html",
+  "import-duty-guide.html",
+  "form-e-guide.html",
+]
+
+
 def test_blog_index_lists_articles():
   html = (SITE_INDEX.parent / "blog" / "index.html").read_text(
     encoding="utf-8"
   )
   assert "<h1>บทความ</h1>" in html
-  assert "hs-code-lookup-guide.html" in html
+  for slug in ARTICLES:
+    assert slug in html
   assert "gateway-1008099094873.asia-southeast1.run.app" in html  # CTA
   assert "mailto:yaw2558@gmail.com" in html
   assert "../styles.css" in html  # shared brand stylesheet
 
 
 def test_article_seo_and_cta():
-  html = (SITE_INDEX.parent / "blog" / "hs-code-lookup-guide.html").read_text(
+  for slug in ARTICLES:
+    html = (SITE_INDEX.parent / "blog" / slug).read_text(encoding="utf-8")
+    assert "<h1>" in html, slug
+    assert '<meta name="description"' in html, slug
+    assert 'property="og:type" content="article"' in html, slug
+    assert "application/ld+json" in html, slug  # Article schema
+    assert "gateway-1008099094873.asia-southeast1.run.app" in html, slug  # CTA
+    assert "<details" in html, slug  # FAQ accordions
+    assert "../styles.css" in html, slug
+  first = (SITE_INDEX.parent / "blog" / ARTICLES[0]).read_text(
     encoding="utf-8"
   )
-  assert "<h1>" in html and "HS Code" in html
-  assert '<meta name="description"' in html
-  assert 'property="og:type" content="article"' in html
-  assert "application/ld+json" in html  # Article schema
-  assert "customs.go.th" in html  # official-source link
-  assert "gateway-1008099094873.asia-southeast1.run.app" in html  # CTA
-  assert "<details" in html  # FAQ accordions
-  assert "../styles.css" in html
+  assert "HS Code" in first
+  assert "customs.go.th" in first  # official-source link
