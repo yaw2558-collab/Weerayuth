@@ -86,3 +86,12 @@ def test_chinese_present():
 def test_chat_sends_ui_language():
   html = _index_html()
   assert "f.append('lang',lang())" in html  # AI answers follow tc-lang
+
+
+def test_history_card_present():
+  html = _index_html()
+  assert 'id="histcard"' in html
+  assert 'id="histlist"' in html
+  assert "loadHistory()" in html
+  assert "histCache" in html  # clicked items render from cache, no refetch
+  assert "hist_t" in html and "hist_empty" in html  # i18n keys

@@ -434,6 +434,38 @@ def consent(authorization: str | None = Header(default=None)):
   return {"ok": True}
 
 
+HISTORY_LIMIT = 30
+
+
+def _user_usage(uid: str) -> list[dict]:
+  """usage_logs rows for one user (single-field query — no index needed;
+  sorted in Python). Fails open to [] so a DB hiccup never breaks the page."""
+  try:
+    docs = db.collection("usage_logs").where("user_id", "==", uid).stream()
+    return [d.to_dict() or {} for d in docs]
+  except Exception:
+    return []
+
+
+@app.get("/history")
+def history(authorization: str | None = Header(default=None)):
+  claims = _verify(authorization)
+  items = []
+  for r in _user_usage(claims["uid"]):
+    if r.get("free_reason"):
+      continue  # free clarifications never had a real answer
+    items.append(
+      {
+        "question": r.get("question", ""),
+        "answer": r.get("answer", ""),  # "" for pre-history rows
+        "ts": _iso(r.get("ts")),
+        "cached": bool(r.get("cached", False)),
+      }
+    )
+  items.sort(key=lambda e: e["ts"] or "", reverse=True)
+  return {"history": items[:HISTORY_LIMIT]}
+
+
 def _grant_credits(uid: str, credits: int, reason: str) -> int:
   """Add credits to a user (transactional) + ledger entry. Returns new balance."""
 
@@ -828,6 +860,7 @@ def _log_free_query(uid, sid, message, answer):
         "ts": firestore.SERVER_TIMESTAMP,
         "session_id": sid,
         "question": message,
+        "answer": answer,
         "answer_chars": len(answer),
         "prompt_tokens": 0,
         "candidates_tokens": 0,
@@ -852,6 +885,7 @@ def _usage_row(uid, sid, message, answer, usage, attachment, cached=False) -> di
     "ts": firestore.SERVER_TIMESTAMP,
     "session_id": sid,
     "question": message,
+    "answer": answer,
     "answer_chars": len(answer),
     "prompt_tokens": usage["prompt_tokens"],
     "candidates_tokens": usage["candidates_tokens"],
