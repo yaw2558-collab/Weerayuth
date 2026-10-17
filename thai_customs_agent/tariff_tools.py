@@ -185,12 +185,25 @@ def search_tariff(keyword: str, limit: int = 10) -> dict:
   }
 
 
-def _fmt_rates(line: dict) -> str:
+# Wrapper labels for user-facing tariff lines (the description itself is
+# official ITD Thai text and stays untranslated in every language).
+_RATE_TXT = {
+  "th": {"exempt": "ยกเว้นอากร", "na": "ไม่ระบุ", "nofta": "ไม่พบในฐาน",
+         "fta": "FTA(จีน)", "permit": "ใบอนุญาต:"},
+  "en": {"exempt": "duty-free", "na": "n/a", "nofta": "not in base",
+         "fta": "FTA(CN)", "permit": "permits:"},
+  "zh": {"exempt": "免税", "na": "未列明", "nofta": "库中无",
+         "fta": "FTA(中国)", "permit": "许可证："},
+}
+
+
+def _fmt_rates(line: dict, lang: str = "th") -> str:
+  t = _RATE_TXT.get(lang, _RATE_TXT["th"])
   mfn = line["mfn"]
   if line["mfn_note"] == "exempt":
-    mfn_s = "ยกเว้นอากร"
+    mfn_s = t["exempt"]
   elif mfn is None:
-    mfn_s = line["mfn_note"] or "ไม่ระบุ"
+    mfn_s = line["mfn_note"] or t["na"]
   else:
     mfn_s = f"{mfn}%"
   wto = line["wto"]
@@ -206,15 +219,16 @@ def _fmt_rates(line: dict) -> str:
       if len(set(rcep)) == 1
       else f"RCEP {min(rcep)}–{max(rcep)}%"
     )
-  fta_s = ", ".join(parts) if parts else "ไม่พบในฐาน"
-  return f"MFN {mfn_s} | WTO {wto_s} | FTA(จีน) {fta_s}"
+  fta_s = ", ".join(parts) if parts else t["nofta"]
+  return f"MFN {mfn_s} | WTO {wto_s} | {t['fta']} {fta_s}"
 
 
-def _fmt_line(line: dict) -> str:
+def _fmt_line(line: dict, lang: str = "th") -> str:
   desc = line["th"] or line["en"]
   permits = ", ".join(line["permits"]) if line["permits"] else "-"
+  plabel = _RATE_TXT.get(lang, _RATE_TXT["th"])["permit"]
   return (
-    f"{line['hs']} | {desc} | {_fmt_rates(line)} | ใบอนุญาต: {permits}"
+    f"{line['hs']} | {desc} | {_fmt_rates(line, lang)} | {plabel} {permits}"
   )
 
 
@@ -349,7 +363,9 @@ def retrieve_context(
   )
 
 
-def format_candidates(message: str, max_lines: int = 8) -> str:
+def format_candidates(
+  message: str, max_lines: int = 8, lang: str = "th"
+) -> str:
   """User-facing ITD candidate lines for the breaker fallback ($0, no model).
 
   "" when nothing matches (caller then uses the generic fallback text).
@@ -357,7 +373,7 @@ def format_candidates(message: str, max_lines: int = 8) -> str:
   lines, _ = _collect(message, max_lines)
   if not lines:
     return ""
-  return "\n".join(_fmt_line(line) for line in lines)
+  return "\n".join(_fmt_line(line, lang) for line in lines)
 
 
 # HS-claim cues in files: dotted codes match anywhere, but bare digit runs
@@ -440,46 +456,73 @@ def _compact_rate(line: dict) -> str:
   return line["mfn_note"] or "ไม่ระบุ"
 
 
-def _correction_block(code: str, digits: str) -> list[str]:
+_VERIFY_TXT = {
+  "th": {
+    "head": "**ตรวจสอบอัตราจากฐานพิกัดทางการ (ITD):**",
+    "missing": "ไม่พบในฐานพิกัดทางการ (ITD) — โปรดตรวจสอบ",
+    "nocode": "ไม่มีรหัสนี้ในฐานพิกัดทางการ (ITD HS2022)",
+    "real": "รหัสที่มีจริงภายใต้ {head} ({total} รหัส):",
+    "more": "... และอีก {n} รหัส",
+  },
+  "en": {
+    "head": "**Verify rates against the official tariff base (ITD):**",
+    "missing": "not found in the official tariff base (ITD) — please verify",
+    "nocode": "not in the official tariff base (ITD HS2022)",
+    "real": "real subdivisions under {head} ({total} codes):",
+    "more": "... and {n} more codes",
+  },
+  "zh": {
+    "head": "**对照官方税则库 (ITD) 核对税率：**",
+    "missing": "官方税则库 (ITD) 中无此编码——请核实",
+    "nocode": "官方税则库 (ITD HS2022) 中无此编码",
+    "real": "{head} 项下实际存在的子目 ({total} 个)：",
+    "more": "... 还有 {n} 个",
+  },
+}
+
+
+def _correction_block(code: str, digits: str, lang: str = "th") -> list[str]:
   """Correction for an 8-digit code missing from the book: list the real
   subdivisions under its 6-digit family so the user can pick correctly."""
+  t = _VERIFY_TXT.get(lang, _VERIFY_TXT["th"])
   fam = lookup_tariff(digits[:6])
   lines = fam.get("lines", [])
   if fam.get("match") == "none" or not lines:
-    return [f"- {code}: ไม่พบในฐานพิกัดทางการ (ITD) — โปรดตรวจสอบ"]
+    return [f"- {code}: {t['missing']}"]
   total = fam.get("count", len(lines))
   head = f"{digits[:4]}.{digits[4:6]}"
   rows = [
-    f"- {code}: ไม่มีรหัสนี้ในฐานพิกัดทางการ (ITD HS2022)",
-    f"  รหัสที่มีจริงภายใต้ {head} ({total} รหัส):",
+    f"- {code}: {t['nocode']}",
+    "  " + t["real"].format(head=head, total=total),
   ]
   for ln in lines[:_CORRECTION_SHOW]:
     desc = ln["th"] or ln["en"]
     rows.append(f"  - {ln['hs']} | {desc} | MFN {_compact_rate(ln)}")
   if total > _CORRECTION_SHOW:
-    rows.append(f"  - ... และอีก {total - _CORRECTION_SHOW} รหัส")
+    rows.append("  - " + t["more"].format(n=total - _CORRECTION_SHOW))
   return rows
 
 
-def format_verify_box(codes: list[str]) -> str:
+def format_verify_box(codes: list[str], lang: str = "th") -> str:
   """กล่องตรวจเลขท้าย: เทียบพิกัดในคำตอบกับฐานทางการ + ดักรหัสแต่ง."""
+  t = _VERIFY_TXT.get(lang, _VERIFY_TXT["th"])
   rows = []
   for code in codes[:12]:
     digits = "".join(ch for ch in code if ch.isdigit())
     r = lookup_tariff(code)
     if r.get("match") == "none" or "error" in r:
       if len(digits) >= 8:
-        rows.extend(_correction_block(code, digits))
+        rows.extend(_correction_block(code, digits, lang))
       else:
-        rows.append(f"- {code}: ไม่พบในฐานพิกัดทางการ (ITD) — โปรดตรวจสอบ")
+        rows.append(f"- {code}: {t['missing']}")
       continue
     if len(digits) < 8:
       continue  # real 6-digit family mention, not a rate claim — skip noise
     line = r["lines"][0]
-    rows.append(f"- {_fmt_line(line)}")
+    rows.append(f"- {_fmt_line(line, lang)}")
   if not rows:
     return ""
-  return "**ตรวจสอบอัตราจากฐานพิกัดทางการ (ITD):**\n" + "\n".join(rows)
+  return t["head"] + "\n" + "\n".join(rows)
 
 
 def format_lookup_lines(codes: list[str]) -> str:

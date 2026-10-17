@@ -111,7 +111,7 @@ def test_vague_json_is_free_and_skips_runner(monkeypatch):
   r = client.post("/chat", data={"message": "พิกัดศุลกากร"}, headers=AUTH)
   assert r.status_code == 200
   d = r.json()
-  assert d["answer"] == main.CLARIFY_MD + main.FOOTER
+  assert d["answer"] == main.CLARIFY["th"] + main.FOOTER["th"]
   assert d["usage"]["free"] is True
   assert d["usage"]["est_cost_usd"] == 0.0
   assert d["usage"]["grounding_calls"] == 0
@@ -159,7 +159,7 @@ def test_vague_with_attachment_runs_runner(monkeypatch):
   assert r.status_code == 200
   d = r.json()
   assert d["answer"] == (
-    "พิกัด 8518" + "\n\n" + main.DISCLAIMER_SHORT + main.FOOTER
+    "พิกัด 8518" + "\n\n" + main.DISCLAIMER["th"] + main.FOOTER["th"]
   )  # normal path, charged
   assert d["usage"]["free"] is False
   assert len(charges) == 1
@@ -221,8 +221,8 @@ def test_breaker_trips_stops_early_and_uses_fallback(monkeypatch):
   # the model failed, not the user.
   assert "8518" in d["answer"]
   assert "ITD HS2022" in d["answer"]
-  assert main.DISCLAIMER_SHORT in d["answer"]
-  assert d["answer"].endswith(main.FOOTER)
+  assert main.DISCLAIMER["th"] in d["answer"]
+  assert d["answer"].endswith(main.FOOTER["th"])
   assert len(charges) == 1  # real spend still charged
   assert puts == []  # fallback never cached
 
@@ -244,7 +244,7 @@ def test_breaker_fallback_generic_when_no_candidates(monkeypatch):
   d = r.json()
   assert d["usage"]["capped"] is True
   assert d["answer"] == (
-    main.CAPPED_MD + "\n\n" + main.DISCLAIMER_SHORT + main.FOOTER
+    main.CAPPED["th"] + "\n\n" + main.DISCLAIMER["th"] + main.FOOTER["th"]
   )
   assert puts == []  # fallback never cached
 
@@ -268,8 +268,8 @@ def test_breaker_keeps_long_answer_and_caches(monkeypatch):
   assert d["answer"] == (
     "y" * 50 * main.MAX_GROUNDING_QUERIES
     + "\n\n"
-    + main.DISCLAIMER_SHORT
-    + main.FOOTER
+    + main.DISCLAIMER["th"]
+    + main.FOOTER["th"]
   )
   assert len(puts) == 1  # full answer is cacheable
 
@@ -290,7 +290,7 @@ def test_normal_run_under_cap_not_capped(monkeypatch):
   d = r.json()
   assert d["usage"]["grounding_calls"] == 8  # probe-verified real shape
   assert d["usage"]["capped"] is False
-  assert d["answer"] == "พิกัด 6109" + "\n\n" + main.DISCLAIMER_SHORT + main.FOOTER
+  assert d["answer"] == "พิกัด 6109" + "\n\n" + main.DISCLAIMER["th"] + main.FOOTER["th"]
 
 
 def test_agent_prompt_has_search_budget():

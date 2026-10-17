@@ -81,3 +81,8 @@ def test_chinese_present():
   html = _index_html()
   assert "泰国海关顾问" in html  # ZH strings embedded
   assert "nextLang" in html  # 3-way toggle
+
+
+def test_chat_sends_ui_language():
+  html = _index_html()
+  assert "f.append('lang',lang())" in html  # AI answers follow tc-lang

@@ -267,7 +267,7 @@ async function send(){if(busy)return;const m=msg.value.trim();if(!m)return;busy=
 addMsg('user',md(m));msg.value='';updateCount();
 const wait=addMsg('ai','<span class="typing"><span></span><span></span><span></span></span>');
 const bodyEl=wait.querySelector('.body');
-try{const f=new FormData();f.append('message',m);if(sid)f.append('session_id',sid);
+try{const f=new FormData();f.append('message',m);f.append('lang',lang());if(sid)f.append('session_id',sid);
 if(file.files[0])f.append('file',file.files[0]);file.value='';filename.textContent='';
 const t=await auth.currentUser.getIdToken();
 const r=await fetch('/chat',{method:'POST',headers:{Authorization:'Bearer '+t,Accept:'text/event-stream'},body:f});

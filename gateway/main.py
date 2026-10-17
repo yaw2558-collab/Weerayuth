@@ -76,7 +76,7 @@ NEW_USER_BONUS = 30  # 3 free trial queries
 RATE_LIMIT_S = 20
 MAX_FILE_MB = 20
 MAX_TEXT_CHARS = 100_000
-CACHE_VERSION = "v6"  # v6: attachment code verdicts + comms recall (รับส่ง/ใยแก้ว→8517)
+CACHE_VERSION = "v7"  # v7: answers follow UI lang; cache key scoped by lang
 CACHE_TTL_S = 30 * 24 * 3600  # cached answers stay servable for 30 days
 
 # Guardrails (2026-10-12): vague questions used to spiral into dozens of
@@ -91,14 +91,30 @@ _REFUSAL_MARKERS = (
   "ไม่สามารถระบุ",
   "ไม่พบข้อมูลอัตร",
   "ไม่พบพิกัด",
+  "see the verification box below",  # canonical EN refusal (see _LANG_DIRECTIVE)
+  "见下方验证框",  # canonical ZH refusal (see _LANG_DIRECTIVE)
 )
 MAX_SOURCES = 8  # verifiable reference links appended per answer
 
-DISCLAIMER_SHORT = (
-  "*ข้อมูลนี้เพื่อประกอบการพิจารณาเบื้องต้น ไม่ใช่คำวินิจฉัยทางการ "
-  "หากต้องการผลผูกพันทางกฎหมายให้ยื่นขอคำวินิจฉัยพิกัดล่วงหน้า "
-  "(Advance Ruling) ต่อกรมศุลกากร หรือโทร 1164*"
-)
+# User-facing templates follow the UI language (th/en/zh). Every disclaimer
+# must contain the literal "Advance Ruling" — _finalize_answer uses it as
+# the backstop check, so a missing marker would double-append.
+DISCLAIMER = {
+  "th": (
+    "*ข้อมูลนี้เพื่อประกอบการพิจารณาเบื้องต้น ไม่ใช่คำวินิจฉัยทางการ "
+    "หากต้องการผลผูกพันทางกฎหมายให้ยื่นขอคำวินิจฉัยพิกัดล่วงหน้า "
+    "(Advance Ruling) ต่อกรมศุลกากร หรือโทร 1164*"
+  ),
+  "en": (
+    "*This information is for preliminary reference only, not an official "
+    "ruling. For a legally binding result, apply for an Advance Ruling "
+    "from Thai Customs, or call 1164.*"
+  ),
+  "zh": (
+    "*本信息仅供初步参考，不构成官方裁定。如需具有法律效力的结论，"
+    "请向泰国海关申请预裁定 (Advance Ruling)，或致电1164。*"
+  ),
+}
 
 # Tokens stripped to find the "core" of a question. Generic customs nouns +
 # question scaffolding / politeness particles (Thai + English).
@@ -132,30 +148,149 @@ _VAGUE_GREETINGS = frozenset([
   "ดีคะ", "good morning", "good afternoon",
 ])
 
-CLARIFY_MD = (
-  "**ขอข้อมูลเพิ่มนิดนึง เพื่อหาพิกัดให้ตรงนะครับ**\n\n"
-  "พิมพ์สินค้าที่จะนำเข้ามาให้ชัดกว่านี้หน่อย เช่น\n"
-  "- สินค้าคืออะไร (เช่น ลำโพงบลูทูธ, เสื้อยืดผ้าฝ้าย)\n"
-  "- วัสดุ/ส่วนประกอบหลัก และหน้าที่ใช้งาน\n"
-  "- สภาพ: สำเร็จรูป / ชิ้นส่วน / วัตถุดิบ\n"
-  "- ประเทศต้นทาง (เช่น จีน) — มีผลต่อสิทธิ FTA\n\n"
-  "ตัวอย่าง: \"นำเข้าลำโพงบลูทูธจากจีน เสียอากรเท่าไหร่\"\n\n"
-  "*ข้อความนี้ไม่ตัดเครดิตครับ ถามต่อได้เลย*"
-)
+CLARIFY = {
+  "th": (
+    "**ขอข้อมูลเพิ่มนิดนึง เพื่อหาพิกัดให้ตรงนะครับ**\n\n"
+    "พิมพ์สินค้าที่จะนำเข้ามาให้ชัดกว่านี้หน่อย เช่น\n"
+    "- สินค้าคืออะไร (เช่น ลำโพงบลูทูธ, เสื้อยืดผ้าฝ้าย)\n"
+    "- วัสดุ/ส่วนประกอบหลัก และหน้าที่ใช้งาน\n"
+    "- สภาพ: สำเร็จรูป / ชิ้นส่วน / วัตถุดิบ\n"
+    "- ประเทศต้นทาง (เช่น จีน) — มีผลต่อสิทธิ FTA\n\n"
+    "ตัวอย่าง: \"นำเข้าลำโพงบลูทูธจากจีน เสียอากรเท่าไหร่\"\n\n"
+    "*ข้อความนี้ไม่ตัดเครดิตครับ ถามต่อได้เลย*"
+  ),
+  "en": (
+    "**A bit more detail so I can find the right code**\n\n"
+    "Tell me more clearly what you will import, e.g.\n"
+    "- What is the product (e.g. Bluetooth speaker, cotton T-shirt)\n"
+    "- Main material/components and function\n"
+    "- Condition: finished good / part / raw material\n"
+    "- Country of origin (e.g. China) — affects FTA benefits\n\n"
+    "Example: \"How much duty to import Bluetooth speakers from China?\"\n\n"
+    "*This message is free — ask away*"
+  ),
+  "zh": (
+    "**请补充一点信息，以便找准编码**\n\n"
+    "请把要进口的产品说清楚一点，例如\n"
+    "- 产品是什么（如蓝牙音箱、纯棉T恤）\n"
+    "- 主要材质/成分和用途\n"
+    "- 状态：成品 / 零部件 / 原材料\n"
+    "- 原产国（如中国）——影响FTA优惠\n\n"
+    "示例：\"从中国进口蓝牙音箱要交多少关税？\"\n\n"
+    "*本条消息免费，请继续提问*"
+  ),
+}
 
-CAPPED_MD = (
-  "**ค้นข้อมูลหลายรอบแล้วยังสรุปไม่ได้**\n\n"
-  "ผมค้นจากแหล่งทางการหลายรอบแล้วแต่ยังฟันธงพิกัดไม่ได้ "
-  "ลองถามใหม่ให้เฉพาะเจาะจงขึ้น (เช่น ชื่อสินค้า + พิกัดที่สงสัย ถ้ามี) "
-  "หรือทัก LINE OA ให้ช่วยดูครับ"
-)
+CAPPED = {
+  "th": (
+    "**ค้นข้อมูลหลายรอบแล้วยังสรุปไม่ได้**\n\n"
+    "ผมค้นจากแหล่งทางการหลายรอบแล้วแต่ยังฟันธงพิกัดไม่ได้ "
+    "ลองถามใหม่ให้เฉพาะเจาะจงขึ้น (เช่น ชื่อสินค้า + พิกัดที่สงสัย ถ้ามี) "
+    "หรือทัก LINE OA ให้ช่วยดูครับ"
+  ),
+  "en": (
+    "**Searched several rounds but could not conclude**\n\n"
+    "I searched official sources several times but still cannot pin down "
+    "the code. Try asking again more specifically (e.g. product name + "
+    "suspected code, if any), or message our LINE OA for help."
+  ),
+  "zh": (
+    "**多次查询仍无法确定**\n\n"
+    "我已多次查询官方来源，但仍无法确定编码。请换个更具体的问法重试"
+    "（如产品名称＋疑似编码），或联系我们的LINE OA寻求帮助。"
+  ),
+}
 
-FOOTER = (
-  "\n\n---\nสนใจใช้บริการนำเข้า/ปรึกษาพิกัดเพิ่มเติม ติดต่อเรา: "
-  "[LINE OA](https://lin.ee/Z55Jn7C) | "
-  "[Facebook](https://www.facebook.com/weerayuth.sangkamanee.2025) | "
-  "[yaw2558@gmail.com](mailto:yaw2558@gmail.com)"
-)
+FOOTER = {
+  "th": (
+    "\n\n---\nสนใจใช้บริการนำเข้า/ปรึกษาพิกัดเพิ่มเติม ติดต่อเรา: "
+    "[LINE OA](https://lin.ee/Z55Jn7C) | "
+    "[Facebook](https://www.facebook.com/weerayuth.sangkamanee.2025) | "
+    "[yaw2558@gmail.com](mailto:yaw2558@gmail.com)"
+  ),
+  "en": (
+    "\n\n---\nFor import services / HS advice, contact us: "
+    "[LINE OA](https://lin.ee/Z55Jn7C) | "
+    "[Facebook](https://www.facebook.com/weerayuth.sangkamanee.2025) | "
+    "[yaw2558@gmail.com](mailto:yaw2558@gmail.com)"
+  ),
+  "zh": (
+    "\n\n---\n如需进口服务或HS编码咨询，请联系我们："
+    "[LINE OA](https://lin.ee/Z55Jn7C) | "
+    "[Facebook](https://www.facebook.com/weerayuth.sangkamanee.2025) | "
+    "[yaw2558@gmail.com](mailto:yaw2558@gmail.com)"
+  ),
+}
+
+SOURCES_HDR = {
+  "th": "**ลิงก์อ้างอิงที่ตรวจสอบได้:**",
+  "en": "**Verifiable reference links:**",
+  "zh": "**可验证的参考链接：**",
+}
+
+STAGE = {
+  "th": "กำลังค้นข้อมูลจากแหล่งทางการ…",
+  "en": "Searching official sources…",
+  "zh": "正在查询官方来源…",
+}
+
+BREAKER_HDR = {
+  "th": (
+    "**ค้นจากแหล่งทางการหลายรอบแล้วยังฟันธงไม่ได้ — "
+    "นี่คือตัวเลือกจากฐานพิกัดทางการ (ITD HS2022):**"
+  ),
+  "en": (
+    "**Searched official sources several rounds without a firm conclusion — "
+    "here are candidates from the official tariff base (ITD HS2022):**"
+  ),
+  "zh": (
+    "**多次查询官方来源仍无法确定——"
+    "以下为官方税则库 (ITD HS2022) 的候选编码：**"
+  ),
+}
+
+# Per-message answer-language directives (Thai needs none — it is the model
+# default). Codes, rates, and ITD text are copied verbatim, never
+# translated; the refusal sentence in each directive doubles as the enrich
+# trigger in _REFUSAL_MARKERS.
+_LANG_DIRECTIVE = {
+  "en": (
+    "[Answer language: English — write the ENTIRE answer in English "
+    "(GRI reasoning, duty rates, permits, references). Copy HS codes, "
+    "rates, and ITD base text verbatim — never translate codes or numbers. "
+    "If a cited code's rate or permit is missing from the attached text, "
+    "write exactly: see the verification box below. End with this "
+    "disclaimer: *This information is for preliminary reference only, not "
+    "an official ruling. For a legally binding result, apply for an "
+    "Advance Ruling from Thai Customs, or call 1164.*]"
+  ),
+  "zh": (
+    "[回答语言：简体中文——整篇回答用简体中文（GRI归类理由、税率、许可证、"
+    "参考链接）。HS编码、税率和ITD原文逐字照抄，不得翻译或改动数字。"
+    "若所引编码的税率或许可证在附带文本中没有，请写：见下方验证框。"
+    "结尾附上本免责声明：*本信息仅供初步参考，不构成官方裁定。"
+    "如需具有法律效力的结论，请向泰国海关申请预裁定 (Advance Ruling)，"
+    "或致电1164。*]"
+  ),
+}
+
+# Keeps the enrich rewrite in the original answer's language (the enrich
+# agent's own instruction is Thai and would otherwise convert EN/ZH
+# answers back to Thai).
+_ENRICH_DIRECTIVE = {
+  "en": (
+    "[Rewrite in English. Keep the original answer's structure and "
+    "language — fill only the missing rates/permits.]"
+  ),
+  "zh": (
+    "[用简体中文改写。保持原回答的结构和语言——只补充缺失的税率/许可证。]"
+  ),
+}
+
+
+def _normalize_lang(value: str | None) -> str:
+  v = (value or "").strip().lower()
+  return v if v in ("th", "en", "zh") else "th"
 
 # Pricing in USD (published Gemini pricing) - telemetry estimate only.
 IN_PER_1M = 1.25
@@ -549,8 +684,8 @@ def _normalize_question(text: str) -> str:
   return " ".join(text.strip().lower().split())
 
 
-def _cache_key(normalized: str) -> str:
-  raw = f"{CACHE_VERSION}:{normalized}".encode("utf-8")
+def _cache_key(normalized: str, lang: str = "th") -> str:
+  raw = f"{CACHE_VERSION}:{lang}:{normalized}".encode("utf-8")
   return hashlib.sha256(raw).hexdigest()
 
 
@@ -641,11 +776,11 @@ def _usage_dict(acc: dict, latency: float, capped: bool = False) -> dict:
   }
 
 
-def _finalize_answer(answer: str, acc: dict) -> str:
+def _finalize_answer(answer: str, acc: dict, lang: str = "th") -> str:
   """Strip broken [n] citation markers, append verifiable links + disclaimer."""
   out = re.sub(r"\[[\d,\s]+\]", "", answer)
   out = re.sub(r"\n{3,}", "\n\n", out).strip()
-  box = format_verify_box(extract_hs_codes(out))
+  box = format_verify_box(extract_hs_codes(out), lang)
   if box:
     out += "\n\n" + box
   if acc.get("sources"):
@@ -653,9 +788,9 @@ def _finalize_answer(answer: str, acc: dict) -> str:
       f"- [{t.replace('[', '(').replace(']', ')')}]({u})"
       for t, u in acc["sources"]
     )
-    out += "\n\n**ลิงก์อ้างอิงที่ตรวจสอบได้:**\n" + links
+    out += "\n\n" + SOURCES_HDR[lang] + "\n" + links
   if "Advance Ruling" not in out:
-    out += "\n\n" + DISCLAIMER_SHORT
+    out += "\n\n" + DISCLAIMER[lang]
   return out
 
 
@@ -778,26 +913,22 @@ async def _ensure_session(uid: str, sid: str) -> None:
     )
 
 
-def _breaker_fallback(message: str) -> str:
+def _breaker_fallback(message: str, lang: str = "th") -> str:
   """Deterministic degradation when the model burns its search budget.
 
   Vague questions never reach here (the free path filters them first), so
   asking for more details is always wrong — return ITD candidates instead.
   $0, no model call. Never cached (caller clears the cache key).
   """
-  cands = format_candidates(message)
+  cands = format_candidates(message, lang=lang)
   if cands:
     return (
-      "**ค้นจากแหล่งทางการหลายรอบแล้วยังฟันธงไม่ได้ — "
-      "นี่คือตัวเลือกจากฐานพิกัดทางการ (ITD HS2022):**\n\n"
-      + cands
-      + "\n\n"
-      + DISCLAIMER_SHORT
+      BREAKER_HDR[lang] + "\n\n" + cands + "\n\n" + DISCLAIMER[lang]
     )
-  return CAPPED_MD + "\n\n" + DISCLAIMER_SHORT
+  return CAPPED[lang] + "\n\n" + DISCLAIMER[lang]
 
 
-async def _maybe_enrich(uid, sid, message, answer, acc) -> str:
+async def _maybe_enrich(uid, sid, message, answer, acc, lang="th") -> str:
   """Second pass: fill refused rates/permits with base data (no grounding).
 
   Runs only when the answer refuses numbers it cited codes for; fails open
@@ -812,6 +943,8 @@ async def _maybe_enrich(uid, sid, message, answer, acc) -> str:
     f"[คำถาม]\n{message}\n\n[คำตอบเดิม]\n{answer}\n\n"
     "[ข้อมูลพิกัดจากฐาน ITD — คัดลอกตัวเลขตรงตัว]\n" + block
   )
+  if lang in _ENRICH_DIRECTIVE:
+    prompt += "\n\n" + _ENRICH_DIRECTIVE[lang]
   try:
     sid2 = f"{sid}-enrich"
     await _ensure_session(uid, sid2)
@@ -831,7 +964,7 @@ async def _maybe_enrich(uid, sid, message, answer, acc) -> str:
     return answer
 
 
-async def _chat_once_payload(uid, sid, msg, cache_key, message):
+async def _chat_once_payload(uid, sid, msg, cache_key, message, lang="th"):
   """Run the agent to completion; returns (raw_answer, usage)."""
   t0 = time.time()
   acc = _new_acc()
@@ -849,21 +982,21 @@ async def _chat_once_payload(uid, sid, msg, cache_key, message):
   latency = time.time() - t0
   answer = "".join(texts)
   if capped and len(answer.strip()) < MIN_ANSWER_CHARS:
-    answer = _breaker_fallback(message)
+    answer = _breaker_fallback(message, lang)
     cache_key = None  # never cache the fallback
   else:
-    answer = await _maybe_enrich(uid, sid, message, answer, acc)
-    answer = _finalize_answer(answer, acc)
+    answer = await _maybe_enrich(uid, sid, message, answer, acc, lang)
+    answer = _finalize_answer(answer, acc, lang)
   usage = _usage_dict(acc, latency, capped)
   if cache_key:
     _cache_put(cache_key, answer, usage)
   return answer, usage
 
 
-async def _chat_sse_gen(uid, sid, message, msg, attachment, cache_key):
+async def _chat_sse_gen(uid, sid, message, msg, attachment, cache_key, lang="th"):
   # Immediate sign of life: the model searches official sources before
   # the first token arrives, so tell the client what is happening.
-  yield _sse("stage", {"text": "กำลังค้นข้อมูลจากแหล่งทางการ…"})
+  yield _sse("stage", {"text": STAGE[lang]})
   t0 = time.time()
   acc = _new_acc()
   texts: list[str] = []
@@ -887,15 +1020,15 @@ async def _chat_sse_gen(uid, sid, message, msg, attachment, cache_key):
   latency = time.time() - t0
   answer = "".join(texts)
   if capped and len(answer.strip()) < MIN_ANSWER_CHARS:
-    answer = _breaker_fallback(message)
+    answer = _breaker_fallback(message, lang)
     cache_key = None  # never cache the fallback
   else:
-    answer = await _maybe_enrich(uid, sid, message, answer, acc)
-    answer = _finalize_answer(answer, acc)
+    answer = await _maybe_enrich(uid, sid, message, answer, acc, lang)
+    answer = _finalize_answer(answer, acc, lang)
   usage = _usage_dict(acc, latency, capped)
   if cache_key:
     _cache_put(cache_key, answer, usage)
-  full = answer + FOOTER
+  full = answer + FOOTER[lang]
   remaining = _charge_and_log(uid, sid, message, full, usage, attachment)
   if remaining is None:
     yield _sse("error", {"error": "insufficient_credits"})
@@ -916,6 +1049,7 @@ async def chat(
   message: str = Form(...),
   session_id: str | None = Form(default=None),
   file: UploadFile | None = File(default=None),
+  lang: str = Form(default="th"),
   authorization: str | None = Header(default=None),
   accept: str | None = Header(default=None),
 ):
@@ -927,6 +1061,7 @@ async def chat(
   _check_rate(uid)
   if user.get("credits", 0) < CREDITS_PER_QUERY:
     raise HTTPException(402, "insufficient_credits")
+  lang = _normalize_lang(lang)
 
   parts: list = []
   attachment = None
@@ -967,6 +1102,9 @@ async def chat(
       tctx = f"{tctx}\n\n{verdicts}" if tctx else verdicts
   if tctx:
     text = tctx + "\n\n" + (text if attachment is not None else "[คำถาม]\n" + text)
+  directive = _LANG_DIRECTIVE.get(lang)
+  if directive:
+    text = directive + "\n\n" + text
   parts.append(genai_types.Part(text=text))
 
   sid = session_id or f"web-{uuid.uuid4().hex[:12]}"
@@ -978,7 +1116,7 @@ async def chat(
   # Free path: vague questions get a template clarification (no model call,
   # no charge). Before cache: never serve a paid spiral answer for these.
   if attachment is None and _is_vague_question(message):
-    full = CLARIFY_MD + FOOTER
+    full = CLARIFY[lang] + FOOTER[lang]
     usage = {
       "prompt_tokens": 0,
       "candidates_tokens": 0,
@@ -1006,14 +1144,17 @@ async def chat(
     return payload
 
   # Instant path: text-only repeats are served from cache (still charged).
-  # Keyed on the raw message: retrieval context is deterministic per message.
+  # Keyed on the raw message + lang: retrieval context is deterministic
+  # per message, but the answer language is not.
   cache_key = (
-    _cache_key(_normalize_question(message)) if attachment is None else None
+    _cache_key(_normalize_question(message), lang)
+    if attachment is None
+    else None
   )
   if cache_key:
     hit = _cache_get(cache_key)
     if hit is not None:
-      full = hit["answer"] + FOOTER
+      full = hit["answer"] + FOOTER[lang]
       usage = {
         "prompt_tokens": 0,
         "candidates_tokens": 0,
@@ -1046,13 +1187,13 @@ async def chat(
 
   if wants_sse:
     return StreamingResponse(
-      _chat_sse_gen(uid, sid, message, msg, attachment, cache_key),
+      _chat_sse_gen(uid, sid, message, msg, attachment, cache_key, lang),
       media_type="text/event-stream",
       headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
-  raw, usage = await _chat_once_payload(uid, sid, msg, cache_key, message)
-  full = raw + FOOTER
+  raw, usage = await _chat_once_payload(uid, sid, msg, cache_key, message, lang)
+  full = raw + FOOTER[lang]
   remaining = _charge_and_log(uid, sid, message, full, usage, attachment)
   if remaining is None:
     raise HTTPException(402, "insufficient_credits")

@@ -103,14 +103,14 @@ def test_chat_json_returns_answer_and_charges(monkeypatch):
   assert r.status_code == 200
   d = r.json()
   assert d["answer"] == (
-    "พิกัด 8518" + "\n\n" + main.DISCLAIMER_SHORT + main.FOOTER
+    "พิกัด 8518" + "\n\n" + main.DISCLAIMER["th"] + main.FOOTER["th"]
   )  # partials not in final; disclaimer backstop appended
   assert d["credits_left"] == 20
   assert d["usage"]["prompt_tokens"] == 100
   assert d["usage"]["candidates_tokens"] == 50
   assert d["session_id"].startswith("web-")
   assert len(puts) == 1
-  assert puts[0][1] == "พิกัด 8518" + "\n\n" + main.DISCLAIMER_SHORT
+  assert puts[0][1] == "พิกัด 8518" + "\n\n" + main.DISCLAIMER["th"]
   assert charges[0][0] == "user1" and charges[0][3] is False
 
 
@@ -135,7 +135,7 @@ def test_chat_sse_streams_tokens_then_done(monkeypatch):
   assert events[-1][0] == "done"
   done = events[-1][1]
   assert done["answer"] == (
-    "พิกัด 8518" + "\n\n" + main.DISCLAIMER_SHORT + main.FOOTER
+    "พิกัด 8518" + "\n\n" + main.DISCLAIMER["th"] + main.FOOTER["th"]
   )
   assert done["credits_left"] == 20
   assert done["usage"]["prompt_tokens"] == 100
@@ -164,7 +164,7 @@ def test_chat_cache_hit_skips_runner_json_and_sse(monkeypatch):
   r = client.post("/chat", data={"message": "คำถามซ้ำสำหรับทดสอบแคช"}, headers=AUTH)
   assert r.status_code == 200
   d = r.json()
-  assert d["answer"] == "cached-raw" + main.FOOTER
+  assert d["answer"] == "cached-raw" + main.FOOTER["th"]
   assert d["usage"]["cached"] is True
   assert d["usage"]["latency_s"] == 0.0
 
@@ -172,7 +172,7 @@ def test_chat_cache_hit_skips_runner_json_and_sse(monkeypatch):
   assert r.status_code == 200
   events = _parse_sse(r.text)
   assert [e for e, _ in events] == ["done"]
-  assert events[0][1]["answer"] == "cached-raw" + main.FOOTER
+  assert events[0][1]["answer"] == "cached-raw" + main.FOOTER["th"]
   assert charges == [True, True]
 
 
@@ -219,7 +219,7 @@ def test_chat_sse_agent_error_yields_error_event(monkeypatch):
 
 
 def test_answer_footer_has_contact_email():
-  assert "mailto:yaw2558@gmail.com" in main.FOOTER
+  assert "mailto:yaw2558@gmail.com" in main.FOOTER["th"]
 
 
 def test_chat_attachment_text_gets_tariff_context(monkeypatch):
