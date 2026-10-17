@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://yaw2558-collab.github.io/Weerayuth/sitemap.xml

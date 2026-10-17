@@ -68,3 +68,26 @@ def test_article_seo_and_cta():
   )
   assert "HS Code" in first
   assert "customs.go.th" in first  # official-source link
+
+
+def test_sitemap_lists_all_pages():
+  xml = (SITE_INDEX.parent / "sitemap.xml").read_text(encoding="utf-8")
+  assert "<urlset" in xml
+  assert "Weerayuth/</loc>" in xml  # homepage
+  assert "Weerayuth/blog/</loc>" in xml  # blog index
+  for slug in ARTICLES:
+    assert f"blog/{slug}</loc>" in xml
+
+
+def test_robots_allows_and_points_to_sitemap():
+  txt = (SITE_INDEX.parent / "robots.txt").read_text(encoding="utf-8")
+  assert "User-agent: *" in txt
+  assert "Allow: /" in txt
+  assert "sitemap.xml" in txt.lower()
+
+
+def test_search_console_verification_file():
+  txt = (SITE_INDEX.parent / "google7afe2f2864abf11a.html").read_text(
+    encoding="utf-8"
+  )
+  assert "google-site-verification: google7afe2f2864abf11a.html" in txt
