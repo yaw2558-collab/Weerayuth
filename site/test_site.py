@@ -36,6 +36,8 @@ ARTICLES = [
   "hs-code-lookup-guide.html",
   "import-duty-guide.html",
   "form-e-guide.html",
+  "rcep-vs-acfta.html",
+  "advance-ruling-guide.html",
 ]
 
 
