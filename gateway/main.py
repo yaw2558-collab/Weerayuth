@@ -205,19 +205,19 @@ FOOTER = {
   "th": (
     "\n\n---\nสนใจใช้บริการนำเข้า/ปรึกษาพิกัดเพิ่มเติม ติดต่อเรา: "
     "[LINE OA](https://lin.ee/Z55Jn7C) | "
-    "[Facebook](https://www.facebook.com/weerayuth.sangkamanee.2025) | "
+    "[Facebook](https://www.facebook.com/profile.php?id=61595424853789) | "
     "[yaw2558@gmail.com](mailto:yaw2558@gmail.com)"
   ),
   "en": (
     "\n\n---\nFor import services / HS advice, contact us: "
     "[LINE OA](https://lin.ee/Z55Jn7C) | "
-    "[Facebook](https://www.facebook.com/weerayuth.sangkamanee.2025) | "
+    "[Facebook](https://www.facebook.com/profile.php?id=61595424853789) | "
     "[yaw2558@gmail.com](mailto:yaw2558@gmail.com)"
   ),
   "zh": (
     "\n\n---\n如需进口服务或HS编码咨询，请联系我们："
     "[LINE OA](https://lin.ee/Z55Jn7C) | "
-    "[Facebook](https://www.facebook.com/weerayuth.sangkamanee.2025) | "
+    "[Facebook](https://www.facebook.com/profile.php?id=61595424853789) | "
     "[yaw2558@gmail.com](mailto:yaw2558@gmail.com)"
   ),
 }

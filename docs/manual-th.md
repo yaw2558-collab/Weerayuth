@@ -61,6 +61,6 @@
 ## 7. ติดต่อเรา
 
 - LINE OA: https://lin.ee/Z55Jn7C
-- Facebook: https://www.facebook.com/weerayuth.sangkamanee.2025
+- Facebook: https://www.facebook.com/profile.php?id=61595424853789
 
 หมายเหตุ: คำตอบจาก AI เป็นข้อมูลเบื้องต้นเพื่อประกอบการตัดสินใจ ควรตรวจสอบกับกรมศุลกากรหรือตัวแทนออกของ (ชิปปิ้ง) ก่อนดำเนินการจริง

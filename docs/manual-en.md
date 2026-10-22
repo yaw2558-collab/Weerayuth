@@ -61,6 +61,6 @@ Forgot your password? — If you registered with email, contact us for a passwor
 ## 7. Contact us
 
 - LINE OA: https://lin.ee/Z55Jn7C
-- Facebook: https://www.facebook.com/weerayuth.sangkamanee.2025
+- Facebook: https://www.facebook.com/profile.php?id=61595424853789
 
 Note: AI answers are preliminary information to support your decisions. Please verify with Thai Customs or your customs broker (shipping agent) before taking action.
