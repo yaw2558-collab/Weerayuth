@@ -362,31 +362,61 @@ def _check_rate(uid: str) -> None:
 
 def _extract_text(filename: str, data: bytes) -> tuple[str, str]:
   name = filename.lower()
-  if name.endswith((".xlsx", ".xls")):
+  if name.endswith(".xls"):
+    # openpyxl cannot read legacy BIFF .xls at all — fail fast with a fix
+    # hint instead of a 500 from load_workbook.
+    raise HTTPException(
+      400,
+      f"เปิดไฟล์ {filename} ไม่ได้: เป็น Excel รุ่นเก่า (.xls) "
+      "กรุณาเปิดใน Excel แล้ว Save As เป็น .xlsx แล้วแนบใหม่",
+    )
+  if name.endswith(".xlsx"):
     import openpyxl
 
-    wb = openpyxl.load_workbook(
-      io.BytesIO(data), read_only=True, data_only=True
-    )
-    parts = []
-    for ws in wb.worksheets:
-      parts.append(f"[sheet: {ws.title}]")
-      for row in ws.iter_rows(values_only=True):
-        parts.append(
-          " | ".join("" if c is None else str(c) for c in row).rstrip(" |")
-        )
+    try:
+      wb = openpyxl.load_workbook(
+        io.BytesIO(data), read_only=True, data_only=True
+      )
+      parts = []
+      for ws in wb.worksheets:
+        parts.append(f"[sheet: {ws.title}]")
+        for row in ws.iter_rows(values_only=True):
+          parts.append(
+            " | ".join("" if c is None else str(c) for c in row).rstrip(" |")
+          )
+    except Exception:
+      raise HTTPException(
+        400,
+        f"เปิดไฟล์ {filename} ไม่ได้: ไฟล์อาจเสีย "
+        "กรุณาตรวจสอบแล้วแนบใหม่",
+      )
     return "\n".join(parts)[:MAX_TEXT_CHARS], "xlsx"
   if name.endswith(".pdf"):
     from pypdf import PdfReader
 
-    reader = PdfReader(io.BytesIO(data))
-    text = "\n".join((p.extract_text() or "") for p in reader.pages)
+    try:
+      reader = PdfReader(io.BytesIO(data))
+      text = "\n".join((p.extract_text() or "") for p in reader.pages)
+    except Exception:
+      raise HTTPException(
+        400,
+        f"เปิดไฟล์ {filename} ไม่ได้: ไฟล์อาจเสีย "
+        "กรุณาตรวจสอบแล้วแนบใหม่",
+      )
     return text[:MAX_TEXT_CHARS], "pdf"
   if name.endswith(".docx"):
     import docx
 
-    doc = docx.Document(io.BytesIO(data))
-    return "\n".join(p.text for p in doc.paragraphs)[:MAX_TEXT_CHARS], "docx"
+    try:
+      doc = docx.Document(io.BytesIO(data))
+      text = "\n".join(p.text for p in doc.paragraphs)
+    except Exception:
+      raise HTTPException(
+        400,
+        f"เปิดไฟล์ {filename} ไม่ได้: ไฟล์อาจเสีย "
+        "กรุณาตรวจสอบแล้วแนบใหม่",
+      )
+    return text[:MAX_TEXT_CHARS], "docx"
   if name.endswith((".csv", ".txt", ".md")):
     return data.decode("utf-8-sig", errors="replace")[:MAX_TEXT_CHARS], "text"
   raise HTTPException(400, f"unsupported file type: {filename}")

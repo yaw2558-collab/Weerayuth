@@ -378,3 +378,49 @@ def test_chat_enrich_fails_open(monkeypatch):
   )
   assert r.status_code == 200
   assert "ดูที่กล่องตรวจสอบด้านล่าง" in r.json()["answer"]
+
+
+def test_chat_corrupt_xlsx_returns_400_not_500(monkeypatch):
+  # Prod 500 (2026-10-28): openpyxl raised OSError on a bad workbook and
+  # nothing caught it. Bad files must be a 400 with a Thai message.
+  _auth(monkeypatch)
+  r = client.post(
+    "/chat",
+    data={"message": "ช่วยดูพิกัดในไฟล์ให้หน่อย"},
+    files={
+      "file": (
+        "items.xlsx",
+        b"not a real workbook",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      )
+    },
+    headers=AUTH,
+  )
+  assert r.status_code == 400
+  assert "เปิดไฟล์" in r.json()["detail"]
+
+
+def test_chat_legacy_xls_gets_save_as_xlsx_hint(monkeypatch):
+  # openpyxl cannot read BIFF .xls at all — tell the user to Save As .xlsx.
+  _auth(monkeypatch)
+  r = client.post(
+    "/chat",
+    data={"message": "ช่วยดูพิกัดในไฟล์ให้หน่อย"},
+    files={"file": ("items.xls", b"\xd0\xcf\x11\xe0garbage", "application/vnd.ms-excel")},
+    headers=AUTH,
+  )
+  assert r.status_code == 400
+  assert "xlsx" in r.json()["detail"]
+
+
+def test_chat_corrupt_pdf_returns_400_not_500(monkeypatch):
+  # Same unhandled-parser hole as xlsx: pypdf on garbage must be a 400.
+  _auth(monkeypatch)
+  r = client.post(
+    "/chat",
+    data={"message": "ช่วยดูพิกัดในไฟล์ให้หน่อย"},
+    files={"file": ("items.pdf", b"%PDF-1.4 garbage no pages", "application/pdf")},
+    headers=AUTH,
+  )
+  assert r.status_code == 400
+  assert "เปิดไฟล์" in r.json()["detail"]
