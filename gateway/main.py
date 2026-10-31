@@ -977,14 +977,14 @@ async def _ensure_session(uid: str, sid: str) -> None:
     )
 
 
-def _breaker_fallback(message: str, lang: str = "th") -> str:
+def _breaker_fallback(message: str, lang: str = "th", file_text: str = "") -> str:
   """Deterministic degradation when the model burns its search budget.
 
   Vague questions never reach here (the free path filters them first), so
   asking for more details is always wrong — return ITD candidates instead.
   $0, no model call. Never cached (caller clears the cache key).
   """
-  cands = format_candidates(message, lang=lang)
+  cands = format_candidates(message, lang=lang, file_text=file_text)
   if cands:
     return (
       BREAKER_HDR[lang] + "\n\n" + cands + "\n\n" + DISCLAIMER[lang]
@@ -1028,7 +1028,7 @@ async def _maybe_enrich(uid, sid, message, answer, acc, lang="th") -> str:
     return answer
 
 
-async def _chat_once_payload(uid, sid, msg, cache_key, message, lang="th"):
+async def _chat_once_payload(uid, sid, msg, cache_key, message, lang="th", file_text=""):
   """Run the agent to completion; returns (raw_answer, usage)."""
   t0 = time.time()
   acc = _new_acc()
@@ -1046,7 +1046,7 @@ async def _chat_once_payload(uid, sid, msg, cache_key, message, lang="th"):
   latency = time.time() - t0
   answer = "".join(texts)
   if capped and len(answer.strip()) < MIN_ANSWER_CHARS:
-    answer = _breaker_fallback(message, lang)
+    answer = _breaker_fallback(message, lang, file_text)
     cache_key = None  # never cache the fallback
   else:
     answer = await _maybe_enrich(uid, sid, message, answer, acc, lang)
@@ -1057,7 +1057,7 @@ async def _chat_once_payload(uid, sid, msg, cache_key, message, lang="th"):
   return answer, usage
 
 
-async def _chat_sse_gen(uid, sid, message, msg, attachment, cache_key, lang="th"):
+async def _chat_sse_gen(uid, sid, message, msg, attachment, cache_key, lang="th", file_text=""):
   # Immediate sign of life: the model searches official sources before
   # the first token arrives, so tell the client what is happening.
   yield _sse("stage", {"text": STAGE[lang]})
@@ -1084,7 +1084,7 @@ async def _chat_sse_gen(uid, sid, message, msg, attachment, cache_key, lang="th"
   latency = time.time() - t0
   answer = "".join(texts)
   if capped and len(answer.strip()) < MIN_ANSWER_CHARS:
-    answer = _breaker_fallback(message, lang)
+    answer = _breaker_fallback(message, lang, file_text)
     cache_key = None  # never cache the fallback
   else:
     answer = await _maybe_enrich(uid, sid, message, answer, acc, lang)
@@ -1179,7 +1179,14 @@ async def chat(
 
   # Free path: vague questions get a template clarification (no model call,
   # no charge). Before cache: never serve a paid spiral answer for these.
-  if attachment is None and _is_vague_question(message):
+  # A text-file attachment only exempts a vague question when the file
+  # yields usable context (retrieval lines or code verdicts) — a 2-word
+  # question + a foreign-language sheet otherwise burns ~$1 of grounding
+  # and ends in the generic capped fallback. Images always run (vision).
+  if _is_vague_question(message) and (
+    attachment is None
+    or (attachment.get("kind") != "image" and not tctx)
+  ):
     full = CLARIFY[lang] + FOOTER[lang]
     usage = {
       "prompt_tokens": 0,
@@ -1251,12 +1258,12 @@ async def chat(
 
   if wants_sse:
     return StreamingResponse(
-      _chat_sse_gen(uid, sid, message, msg, attachment, cache_key, lang),
+      _chat_sse_gen(uid, sid, message, msg, attachment, cache_key, lang, file_text),
       media_type="text/event-stream",
       headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
-  raw, usage = await _chat_once_payload(uid, sid, msg, cache_key, message, lang)
+  raw, usage = await _chat_once_payload(uid, sid, msg, cache_key, message, lang, file_text)
   full = raw + FOOTER[lang]
   remaining = _charge_and_log(uid, sid, message, full, usage, attachment)
   if remaining is None:

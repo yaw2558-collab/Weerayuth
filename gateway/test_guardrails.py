@@ -64,6 +64,7 @@ def _parse_sse(body):
 def test_vague_detector_table():
   vague = [
     "พิกัดศุลกากร",  # the Oct-10 $1.05 spiral
+    "ชื่อ พิกัดศุลกากร",  # the Oct-31 $0.93 spiral (vague + Chinese xlsx)
     "HS code",
     "hi",
     "สวัสดีครับ",
@@ -163,6 +164,73 @@ def test_vague_with_attachment_runs_runner(monkeypatch):
   )  # normal path, charged
   assert d["usage"]["free"] is False
   assert len(charges) == 1
+
+
+def test_vague_with_text_file_no_context_is_free(monkeypatch):
+  # Regression (prod 2026-10-31): a 2-word question + a Chinese xlsx
+  # burned 24 grounding calls (~$0.93) and ended in the generic capped
+  # fallback. A text file with no usable context must not exempt a vague
+  # question from the free clarification path.
+  _auth(monkeypatch, credits=30)
+
+  def _boom(**kw):
+    raise AssertionError("runner must not run for vague + contextless file")
+
+  monkeypatch.setattr(main.runner, "run_async", _boom)
+  charges = []
+  monkeypatch.setattr(
+    main, "_charge_and_log", lambda *a, **k: charges.append(1) or 20
+  )
+  monkeypatch.setattr(main, "_log_free_query", lambda *a: None)
+
+  r = client.post(
+    "/chat",
+    data={"message": "ชื่อ พิกัดศุลกากร"},
+    files={"file": ("note.txt", "物料信息表 无关键词".encode("utf-8"), "text/plain")},
+    headers=AUTH,
+  )
+  assert r.status_code == 200
+  d = r.json()
+  assert d["answer"] == main.CLARIFY["th"] + main.FOOTER["th"]
+  assert d["usage"]["free"] is True
+  assert d["usage"]["grounding_calls"] == 0
+  assert d["credits_left"] == 30  # unchanged
+  assert charges == []  # not charged
+
+
+def test_vague_with_text_file_having_context_runs_runner(monkeypatch):
+  # A vague question + a file that yields retrieval context still runs:
+  # the file carries the substance (e.g. supplier spec naming the goods).
+  _auth(monkeypatch, credits=30)
+  monkeypatch.setattr(
+    main.runner,
+    "run_async",
+    lambda **kw: _gen([_ev("พิกัด 8518")]),
+  )
+  charges = []
+  monkeypatch.setattr(
+    main, "_charge_and_log", lambda *a, **k: charges.append(1) or 20
+  )
+  monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
+
+  r = client.post(
+    "/chat",
+    data={"message": "พิกัดศุลกากร"},
+    files={"file": ("spec.txt", "ลำโพงบลูทูธ".encode("utf-8"), "text/plain")},
+    headers=AUTH,
+  )
+  assert r.status_code == 200
+  d = r.json()
+  assert d["usage"]["free"] is False
+  assert len(charges) == 1
+
+
+def test_breaker_fallback_uses_file_candidates():
+  # The capped fallback mines the attached file too, not just the message.
+  assert "8518" in main._breaker_fallback("xyz", "th", "ลำโพง")
+  assert main._breaker_fallback("xyz", "th", "") == (
+    main.CAPPED["th"] + "\n\n" + main.DISCLAIMER["th"]
+  )
 
 
 async def _gen(events):

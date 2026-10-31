@@ -364,13 +364,13 @@ def retrieve_context(
 
 
 def format_candidates(
-  message: str, max_lines: int = 8, lang: str = "th"
+  message: str, max_lines: int = 8, lang: str = "th", file_text: str = ""
 ) -> str:
   """User-facing ITD candidate lines for the breaker fallback ($0, no model).
 
   "" when nothing matches (caller then uses the generic fallback text).
   """
-  lines, _ = _collect(message, max_lines)
+  lines, _ = _collect(message, max_lines, file_text=file_text)
   if not lines:
     return ""
   return "\n".join(_fmt_line(line, lang) for line in lines)
