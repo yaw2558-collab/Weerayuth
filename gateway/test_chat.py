@@ -94,7 +94,7 @@ def test_chat_json_returns_answer_and_charges(monkeypatch):
 
   def fake_charge(uid, sid, message, answer, usage, attachment, cached=False):
     charges.append((uid, answer, usage, cached))
-    return 20
+    return (20, "log1")
 
   monkeypatch.setattr(main, "_charge_and_log", fake_charge)
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: puts.append((k, a, u)))
@@ -106,6 +106,7 @@ def test_chat_json_returns_answer_and_charges(monkeypatch):
     "พิกัด 8518" + "\n\n" + main.DISCLAIMER["th"] + main.FOOTER["th"]
   )  # partials not in final; disclaimer backstop appended
   assert d["credits_left"] == 20
+  assert d["log_id"] == "log1"
   assert d["usage"]["prompt_tokens"] == 100
   assert d["usage"]["candidates_tokens"] == 50
   assert d["session_id"].startswith("web-")
@@ -122,7 +123,7 @@ def test_chat_sse_streams_tokens_then_done(monkeypatch):
     _fake_run([_ev("สวัสดี", partial=True), _ev("พิกัด 8518", usage=_usage())]),
   )
   monkeypatch.setattr(
-    main, "_charge_and_log", lambda *a, **k: 20
+    main, "_charge_and_log", lambda *a, **k: (20, "log1")
   )
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
 
@@ -138,6 +139,7 @@ def test_chat_sse_streams_tokens_then_done(monkeypatch):
     "พิกัด 8518" + "\n\n" + main.DISCLAIMER["th"] + main.FOOTER["th"]
   )
   assert done["credits_left"] == 20
+  assert done["log_id"] == "log1"
   assert done["usage"]["prompt_tokens"] == 100
 
 
@@ -157,7 +159,7 @@ def test_chat_cache_hit_skips_runner_json_and_sse(monkeypatch):
 
   def fake_charge(uid, sid, message, answer, usage, attachment, cached=False):
     charges.append(cached)
-    return 20
+    return (20, "log1")
 
   monkeypatch.setattr(main, "_charge_and_log", fake_charge)
 
@@ -205,7 +207,7 @@ def test_chat_sse_agent_error_yields_error_event(monkeypatch):
   monkeypatch.setattr(main.runner, "run_async", _failing)
   charges = []
   monkeypatch.setattr(
-    main, "_charge_and_log", lambda *a, **k: charges.append(1) or 20
+    main, "_charge_and_log", lambda *a, **k: charges.append(1) or (20, "log1")
   )
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
 
@@ -231,7 +233,7 @@ def test_chat_attachment_text_gets_tariff_context(monkeypatch):
     yield _ev("พิกัด 8486", usage=_usage())
 
   monkeypatch.setattr(main.runner, "run_async", _capture)
-  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: (20, "log1"))
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
 
   r = client.post(
@@ -263,7 +265,7 @@ def test_chat_attachment_code_verdict_attached(monkeypatch):
     yield _ev("พิกัด 8517.79", usage=_usage())
 
   monkeypatch.setattr(main.runner, "run_async", _capture)
-  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: (20, "log1"))
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
 
   r = client.post(
@@ -319,7 +321,7 @@ def test_chat_enriches_refused_rates(monkeypatch):
     )
 
   monkeypatch.setattr(main.enrich_runner, "run_async", _enrich)
-  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: (20, "log1"))
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
 
   r = client.post(
@@ -345,7 +347,7 @@ def test_chat_skips_enrich_without_refusal(monkeypatch):
     raise AssertionError("enrich must not run without refusal")
 
   monkeypatch.setattr(main.enrich_runner, "run_async", _boom)
-  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: (20, "log1"))
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
 
   r = client.post(
@@ -370,7 +372,7 @@ def test_chat_enrich_fails_open(monkeypatch):
     yield  # pragma: no cover — makes this an async generator
 
   monkeypatch.setattr(main.enrich_runner, "run_async", _failing)
-  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: (20, "log1"))
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
 
   r = client.post(
@@ -411,6 +413,16 @@ def test_chat_legacy_xls_gets_save_as_xlsx_hint(monkeypatch):
   )
   assert r.status_code == 400
   assert "xlsx" in r.json()["detail"]
+
+
+def test_chat_free_path_returns_log_id(monkeypatch):
+  _auth(monkeypatch)
+  monkeypatch.setattr(main, "_log_free_query", lambda *a: "logfree")
+  r = client.post("/chat", data={"message": "สวัสดี"}, headers=AUTH)
+  assert r.status_code == 200
+  d = r.json()
+  assert d["log_id"] == "logfree"
+  assert d["usage"]["free"] is True
 
 
 def test_chat_corrupt_pdf_returns_400_not_500(monkeypatch):

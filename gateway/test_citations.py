@@ -124,7 +124,7 @@ def test_chat_json_answer_finalized_end_to_end(monkeypatch):
       )
     ]),
   )
-  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: (20, "log1"))
   puts = []
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: puts.append(a))
 
@@ -146,7 +146,7 @@ def test_chat_injects_tariff_context_to_runner(monkeypatch):
     yield _ev("พิกัด 8518", queries=["q"])
 
   monkeypatch.setattr(main.runner, "run_async", _capture)
-  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: (20, "log1"))
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
 
   r = client.post("/chat", data={"message": REAL_Q}, headers=AUTH)
@@ -162,7 +162,7 @@ def test_chat_appends_verify_box_for_answer_codes(monkeypatch):
   monkeypatch.setattr(
     main.runner, "run_async", _fake_run([_ev("พิกัด 0901.21.20 ครับ", queries=["q"])])
   )
-  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: (20, "log1"))
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
 
   r = client.post(

@@ -102,11 +102,11 @@ def test_vague_json_is_free_and_skips_runner(monkeypatch):
   monkeypatch.setattr(main.runner, "run_async", _boom)
   charges = []
   monkeypatch.setattr(
-    main, "_charge_and_log", lambda *a, **k: charges.append(1) or 20
+    main, "_charge_and_log", lambda *a, **k: charges.append(1) or (20, "log1")
   )
   frees = []
   monkeypatch.setattr(
-    main, "_log_free_query", lambda *a: frees.append(a)
+    main, "_log_free_query", lambda *a: frees.append(a) or ""
   )
 
   r = client.post("/chat", data={"message": "พิกัดศุลกากร"}, headers=AUTH)
@@ -123,7 +123,7 @@ def test_vague_json_is_free_and_skips_runner(monkeypatch):
 
 def test_vague_sse_yields_done_only(monkeypatch):
   _auth(monkeypatch, credits=30)
-  monkeypatch.setattr(main, "_log_free_query", lambda *a: None)
+  monkeypatch.setattr(main, "_log_free_query", lambda *a: "")
 
   def _boom(**kw):
     raise AssertionError("runner must not run for vague questions")
@@ -147,7 +147,7 @@ def test_vague_with_attachment_runs_runner(monkeypatch):
   )
   charges = []
   monkeypatch.setattr(
-    main, "_charge_and_log", lambda *a, **k: charges.append(1) or 20
+    main, "_charge_and_log", lambda *a, **k: charges.append(1) or (20, "log1")
   )
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
 
@@ -179,9 +179,9 @@ def test_vague_with_text_file_no_context_is_free(monkeypatch):
   monkeypatch.setattr(main.runner, "run_async", _boom)
   charges = []
   monkeypatch.setattr(
-    main, "_charge_and_log", lambda *a, **k: charges.append(1) or 20
+    main, "_charge_and_log", lambda *a, **k: charges.append(1) or (20, "log1")
   )
-  monkeypatch.setattr(main, "_log_free_query", lambda *a: None)
+  monkeypatch.setattr(main, "_log_free_query", lambda *a: "")
 
   r = client.post(
     "/chat",
@@ -209,7 +209,7 @@ def test_vague_with_text_file_having_context_runs_runner(monkeypatch):
   )
   charges = []
   monkeypatch.setattr(
-    main, "_charge_and_log", lambda *a, **k: charges.append(1) or 20
+    main, "_charge_and_log", lambda *a, **k: charges.append(1) or (20, "log1")
   )
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
 
@@ -273,7 +273,7 @@ def test_breaker_trips_stops_early_and_uses_fallback(monkeypatch):
   monkeypatch.setattr(main.runner, "run_async", _spiral)
   charges = []
   monkeypatch.setattr(
-    main, "_charge_and_log", lambda *a, **k: charges.append(1) or 20
+    main, "_charge_and_log", lambda *a, **k: charges.append(1) or (20, "log1")
   )
   puts = []
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: puts.append(k))
@@ -303,7 +303,7 @@ def test_breaker_fallback_generic_when_no_candidates(monkeypatch):
       yield _ev("x", queries=[f"g{i}"])
 
   monkeypatch.setattr(main.runner, "run_async", _spiral)
-  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: (20, "log1"))
   puts = []
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: puts.append(k))
 
@@ -325,7 +325,7 @@ def test_breaker_keeps_long_answer_and_caches(monkeypatch):
       yield _ev("y" * 50, queries=[f"q{i}"])
 
   monkeypatch.setattr(main.runner, "run_async", _long)
-  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: (20, "log1"))
   puts = []
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: puts.append((k, a)))
 
@@ -350,7 +350,7 @@ def test_normal_run_under_cap_not_capped(monkeypatch):
     yield _ev("พิกัด 6109", queries=["a", "b", "c", "d", "e", "f", "g", "h"])
 
   monkeypatch.setattr(main.runner, "run_async", _normal)
-  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: (20, "log1"))
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
 
   r = client.post("/chat", data={"message": REAL_Q}, headers=AUTH)

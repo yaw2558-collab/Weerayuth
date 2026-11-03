@@ -38,6 +38,22 @@ Written by `POST /chat` (Phase 0+).
 | latency_s         | number    | end-to-end seconds           |
 | est_cost_usd      | number    | priced estimate (calibrated) |
 
+## feedback/{auto-id} (P0 accuracy loop)
+
+Written by `POST /feedback` (free, auth required). Reviewed via
+`GET /admin/feedback` (newest first) + `feedback_up/down` in `/admin/stats`.
+
+| field      | type      | notes                                    |
+|------------|-----------|------------------------------------------|
+| user_id    | string    |                                          |
+| ts         | timestamp | server time                              |
+| vote       | string    | `up` / `down`                            |
+| question   | string    | user message (truncated 2000)            |
+| correct_hs | string    | user-suggested code, free text (max 64)  |
+| comment    | string    | user note (truncated 2000)               |
+| log_id     | string    | usage_logs doc id ("" for history votes) |
+| session_id | string    | web session                              |
+
 ## payments/{stripe_session_id} (Phase 2+)
 
 Doc id = Stripe Checkout Session id (webhook idempotency key).

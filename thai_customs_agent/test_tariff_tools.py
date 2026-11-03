@@ -10,6 +10,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from thai_customs_agent.tariff_tools import (
+  _HEADING_DESC,
+  _HEADING_MAP,
+  _SYNONYMS,
+  _TH_KEYWORDS,
   attachment_code_verdicts,
   extract_hs_codes,
   format_candidates,
@@ -236,3 +240,21 @@ def test_format_lookup_lines_skips_fakes_and_families():
   assert "7326.90.99" in out and "MFN 10%" in out
   assert format_lookup_lines(["9999.99.99"]) == ""
   assert format_lookup_lines([]) == ""
+
+
+def test_synonym_maps_are_covered():
+  # Every alias must expand to a real keyword with a heading map, and every
+  # mapped heading needs a parent description for generic-line annotation.
+  for alias, canon in _SYNONYMS.items():
+    assert canon in _TH_KEYWORDS, alias
+    assert canon in _HEADING_MAP, alias
+  for heads in _HEADING_MAP.values():
+    for head in heads:
+      assert head in _HEADING_DESC, head
+
+
+def test_parent_annotation_marks_generic_lines():
+  box = format_verify_box(["6404.11.90"])
+  assert "[รองเท้าพื้นยางส่วนบนผ้า]" in box
+  box = format_verify_box(["0901.21.20"])
+  assert "[" not in box  # specific desc stays verbatim

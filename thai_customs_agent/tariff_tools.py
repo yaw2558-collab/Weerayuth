@@ -39,13 +39,39 @@ _TH_KEYWORDS = (
   "เซรามิก", "หนัง",
   # Machinery / industrial goods (Ch 84-85 recall): without these, parts
   # questions drown in EN-substring noise and the model invents codes.
-  # Order matters: specific first, generic "เครื่อง" last (family quota).
+  # Specific-before-generic is enforced by the longest-first sort below.
   "เซมิคอนดักเตอร์", "เครื่อง",
   # Comms / fiber optics (Ch 8517 recall): transceiver questions pulled
   # pure noise (even shrimp) with zero Ch 85 lines, so the model clung to
   # the attachment's foreign code.
   "รับส่ง", "ใยแก้ว",
+  # P0-1 recall gaps (golden test): each has a _HEADING_MAP entry below.
+  "ร่ม", "กระติก", "เต็นท์", "ผ้าอ้อม", "แปรงสีฟัน", "ยาสีฟัน",
+  "เครื่องปั่น", "เครื่องฟอกอากาศ", "หนังสือ", "น้ำหอม", "ไดร์เป่าผม",
+  "ครีมอาบน้ำ",
 )
+
+# Longest-first so specific phrases outrank the generic words they contain
+# (เครื่องปั่น > เครื่อง, ยาสีฟัน > ยา, ครีมอาบน้ำ > ครีม) in the family-pull
+# quota. Stable sort keeps the hand-tuned relative order among equals.
+_TH_KEYWORDS = tuple(sorted(_TH_KEYWORDS, key=len, reverse=True))
+
+# Alias -> canonical keyword (canonical must be in _TH_KEYWORDS): user words
+# that never appear in the tariff book (brands-as-generic, colloquial names).
+# _collect expands these into the scan so one map entry covers all spellings.
+_SYNONYMS = {
+  "ไอโฟน": "สมาร์ทโฟน",
+  "ไอแพด": "แท็บเล็ต",
+  "มาม่า": "บะหมี่",
+  "รถเก๋ง": "รถยนต์",
+  "รถกระบะ": "รถยนต์",
+  "บิ๊กไบค์": "มอเตอร์ไซค์",
+  "สกู๊ตเตอร์": "มอเตอร์ไซค์",
+  "ตู้แช่": "ตู้เย็น",
+  "พาวเวอร์แบงก์": "แบตเตอรี่",
+  "ยาสระผม": "แชมพู",
+  "ตัวต่อ": "ของเล่น",
+}
 
 _EN_STOP = frozenset(
   "what how much many why when where which that this with from your you "
@@ -99,6 +125,111 @@ _HEADING_MAP = {
   "เครื่อง": ("8479",),
   "รับส่ง": ("8517",),
   "ใยแก้ว": ("8517",),
+  # P0-1 recall gaps (golden test): base wording never contains these words
+  # (formal descriptions differ), so substring search alone cannot reach them.
+  "บะหมี่": ("1902",),
+  "ร่ม": ("6601",),
+  "กระติก": ("9617",),
+  "เต็นท์": ("6306",),
+  "ผ้าอ้อม": ("9619",),
+  "แปรงสีฟัน": ("9603",),
+  "ยาสีฟัน": ("3306",),
+  "เครื่องปั่น": ("8509",),
+  "เครื่องฟอกอากาศ": ("8421",),
+  "หนังสือ": ("4901",),
+  "น้ำหอม": ("3303",),
+  "ไดร์เป่าผม": ("8516",),
+  "ครีมอาบน้ำ": ("3401",),
+}
+
+
+# Short Thai description per 4-digit heading (curated from the HS2022
+# structure). Shown in brackets after generic sub-line descriptions
+# ("อื่น ๆ", "สำหรับทำพันธุ์") so the model and the user know which family
+# an "Other" line belongs to. Annotation only — never quoted as official text.
+_HEADING_DESC = {
+  "0401": "นมและครีมไม่ข้นไม่หวาน",
+  "0402": "นมผง/นมข้น",
+  "0810": "ผลไม้สด",
+  "0901": "กาแฟ",
+  "0902": "ชา",
+  "1006": "ข้าว",
+  "1701": "น้ำตาลทราย/น้ำตาลอ้อย",
+  "1704": "ขนมลูกกวาด/หมากฝรั่ง",
+  "1806": "ช็อกโกแลต",
+  "1902": "พาสต้า/บะหมี่กึ่งสำเร็จรูป",
+  "1905": "ขนมอบ/ขนมปังกรอบ",
+  "2101": "สารสกัดกาแฟ ชา",
+  "2106": "อาหารปรุงแต่ง/อาหารเสริม",
+  "3004": "ยา/เภสัชภัณฑ์",
+  "3105": "ปุ๋ย",
+  "3303": "น้ำหอม",
+  "3304": "เครื่องสำอาง/ครีมบำรุงผิว",
+  "3306": "ยาสีฟัน/ผลิตภัณฑ์ทันตกรรม",
+  "3401": "สบู่/แชมพู/ผลิตภัณฑ์ชำระล้าง",
+  "4202": "กระเป๋าเดินทาง/กระเป๋าถือ",
+  "4802": "กระดาษเขียนพิมพ์",
+  "4901": "หนังสือ/สิ่งพิมพ์",
+  "5702": "พรมทอ",
+  "5703": "พรมปัก/พรมทอแบบอื่น",
+  "5901": "ผ้าเคลือบ/ผ้าใบ",
+  "6104": "กางเกง/กระโปรงถัก",
+  "6107": "ชุดชั้นในชายถัก",
+  "6109": "เสื้อยืด/เสื้อกล้ามถัก",
+  "6110": "เสื้อสเวตเตอร์/เสื้อถัก",
+  "6115": "ถุงเท้า/ถุงน่อง",
+  "6203": "กางเกงชายทอ",
+  "6204": "กางเกง/กระโปรงหญิงทอ",
+  "6205": "เสื้อเชิ้ตชาย",
+  "6206": "เสื้อเบลาส์หญิง",
+  "6207": "ชุดชั้นในชายทอ",
+  "6303": "ม่าน/ผ้าม่าน",
+  "6306": "เต็นท์/ผ้าใบกันแดด",
+  "6307": "ของใช้ผ้าสำเร็จรูปอื่น/หน้ากากผ้า",
+  "6401": "รองเท้ากันน้ำ",
+  "6402": "รองเท้าพื้นยางส่วนบนพลาสติก",
+  "6403": "รองเท้าหนัง",
+  "6404": "รองเท้าพื้นยางส่วนบนผ้า",
+  "6504": "หมวกถัก/หมวกสาน",
+  "6505": "หมวกถัก/หมวกผ้า",
+  "6506": "หมวกอื่น/หมวกนิรภัย",
+  "6601": "ร่มกันฝน/ร่มกันแดด",
+  "8205": "เครื่องมือช่าง",
+  "8211": "มีด/ใบมีด",
+  "8301": "กุญแจล็อก/แม่กุญแจ",
+  "8414": "พัดลม/เครื่องระบายอากาศ",
+  "8415": "เครื่องปรับอากาศ",
+  "8418": "ตู้เย็น/ตู้แช่",
+  "8421": "เครื่องกรอง/เครื่องฟอกอากาศ",
+  "8450": "เครื่องซักผ้า",
+  "8467": "สว่าน/เครื่องมือช่างไฟฟ้า-ลม",
+  "8471": "คอมพิวเตอร์/โน้ตบุ๊ก/แท็บเล็ต",
+  "8473": "อะไหล่คอมพิวเตอร์",
+  "8479": "เครื่องจักรอเนกประสงค์",
+  "8486": "เครื่องจักรผลิตเซมิคอนดักเตอร์",
+  "8506": "ถ่าน/แบตเตอรี่ใช้แล้วทิ้ง",
+  "8507": "แบตเตอรี่ชาร์จได้/พาวเวอร์แบงก์",
+  "8509": "เครื่องใช้ไฟฟ้าขนาดเล็ก/เครื่องปั่น",
+  "8516": "หม้อหุงข้าว/เครื่องทำความร้อนไฟฟ้า",
+  "8517": "โทรศัพท์/สมาร์ทโฟน/อุปกรณ์สื่อสาร",
+  "8518": "ลำโพง/หูฟัง/ไมโครโฟน",
+  "8528": "โทรทัศน์/จอมอนิเตอร์",
+  "8539": "หลอดไฟ",
+  "8703": "รถยนต์นั่ง",
+  "8704": "รถบรรทุก/รถกระบะ",
+  "8711": "มอเตอร์ไซค์/สกู๊ตเตอร์",
+  "8712": "จักรยาน",
+  "9004": "แว่นตา/แว่นกันแดด",
+  "9101": "นาฬิกาข้อมือโลหะมีค่า",
+  "9102": "นาฬิกาข้อมือทั่วไป",
+  "9401": "เก้าอี้/ที่นั่ง",
+  "9403": "เฟอร์นิเจอร์/โต๊ะ/เตียง",
+  "9405": "โคมไฟ/โคมระย้า",
+  "9503": "ของเล่น/ตุ๊กตา/ตัวต่อ",
+  "9603": "แปรง/แปรงสีฟัน",
+  "9608": "ปากกา",
+  "9617": "กระติกสูญญากาศ",
+  "9619": "ผ้าอ้อม/ผ้าอนามัย",
 }
 
 
@@ -133,6 +264,7 @@ def _slim(line: dict) -> dict:
     "fta": line["fta"],
     "section12": line["sec12"],
     "permits": line["permit"],
+    "parent": _HEADING_DESC.get(line["raw"][:4], ""),
   }
 
 
@@ -225,6 +357,12 @@ def _fmt_rates(line: dict, lang: str = "th") -> str:
 
 def _fmt_line(line: dict, lang: str = "th") -> str:
   desc = line["th"] or line["en"]
+  parent = line.get("parent") or ""
+  if parent and (
+    desc.strip() in ("อื่น ๆ", "อื่นๆ", "สำหรับทำพันธุ์", "")
+    or desc.strip().lower() == "other"
+  ):
+    desc = f"{desc} [{parent}]"
   permits = ", ".join(line["permits"]) if line["permits"] else "-"
   plabel = _RATE_TXT.get(lang, _RATE_TXT["th"])["permit"]
   return (
@@ -259,6 +397,9 @@ def _collect(
   # Thai phases scan the message plus any attached-file text; digits and
   # EN tokens stay message-only (see docstring).
   scan = (message or "") if not file_text else f"{message or ''}\n{file_text}"
+  for _alias, _canon in _SYNONYMS.items():
+    if _alias in scan and _canon not in scan:
+      scan += " " + _canon
   # Phase 1: explicit HS digits, exact first.
   for m in _HS_RE.finditer(message or ""):
     raw = m.group(1) + m.group(2) + (m.group(3) or "")

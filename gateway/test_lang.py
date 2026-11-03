@@ -162,7 +162,7 @@ def test_chat_sends_lang_directive_to_model(monkeypatch):
     yield _ev("HS 8518", usage=_usage())
 
   monkeypatch.setattr(main.runner, "run_async", _capture)
-  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: (20, "log1"))
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
 
   r = client.post(
@@ -190,9 +190,9 @@ def test_chat_vague_en_is_free_template(monkeypatch):
   monkeypatch.setattr(main.runner, "run_async", _boom)
   charges = []
   monkeypatch.setattr(
-    main, "_charge_and_log", lambda *a, **k: charges.append(1) or 20
+    main, "_charge_and_log", lambda *a, **k: charges.append(1) or (20, "log1")
   )
-  monkeypatch.setattr(main, "_log_free_query", lambda *a: None)
+  monkeypatch.setattr(main, "_log_free_query", lambda *a: "")
 
   r = client.post(
     "/chat", data={"message": "hs code", "lang": "en"}, headers=AUTH
@@ -209,7 +209,7 @@ def test_chat_caches_per_lang(monkeypatch):
   monkeypatch.setattr(
     main.runner, "run_async", _fake_run([_ev("HS 8518", usage=_usage())])
   )
-  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: (20, "log1"))
   puts = []
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: puts.append(k))
 
@@ -241,7 +241,7 @@ def test_enrich_prompt_keeps_answer_language(monkeypatch):
     yield _ev("x" * 120, usage=_usage())
 
   monkeypatch.setattr(main.enrich_runner, "run_async", _enrich)
-  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: 20)
+  monkeypatch.setattr(main, "_charge_and_log", lambda *a, **k: (20, "log1"))
   monkeypatch.setattr(main, "_cache_put", lambda k, a, u: None)
 
   r = client.post(

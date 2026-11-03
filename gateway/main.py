@@ -76,7 +76,7 @@ NEW_USER_BONUS = 30  # 3 free trial queries
 RATE_LIMIT_S = 20
 MAX_FILE_MB = 20
 MAX_TEXT_CHARS = 100_000
-CACHE_VERSION = "v7"  # v7: answers follow UI lang; cache key scoped by lang
+CACHE_VERSION = "v8"  # v8: P0-1 retrieval (parent desc + synonyms + maps)
 CACHE_TTL_S = 30 * 24 * 3600  # cached answers stay servable for 30 days
 
 # Guardrails (2026-10-12): vague questions used to spiral into dozens of
@@ -477,6 +477,69 @@ def _user_usage(uid: str) -> list[dict]:
     return []
 
 
+class FeedbackIn(BaseModel):
+  vote: str
+  question: str = ""
+  correct_hs: str = ""
+  comment: str = ""
+  log_id: str = ""
+  session_id: str = ""
+
+
+@app.post("/feedback")
+def feedback(body: FeedbackIn, authorization: str | None = Header(default=None)):
+  """User rating for an AI answer (P0 accuracy loop).
+
+  Free (no credits). log_id links fresh answers to their usage_logs row;
+  history replays send question text only. correct_hs is free text —
+  reviewers validate it against the tariff book.
+  """
+  claims = _verify(authorization)
+  if body.vote not in ("up", "down"):
+    raise HTTPException(400, "vote must be 'up' or 'down'")
+  try:
+    db.collection("feedback").add(
+      {
+        "user_id": claims["uid"],
+        "ts": firestore.SERVER_TIMESTAMP,
+        "vote": body.vote,
+        "question": (body.question or "")[:2000],
+        "correct_hs": (body.correct_hs or "")[:64],
+        "comment": (body.comment or "")[:2000],
+        "log_id": (body.log_id or "")[:64],
+        "session_id": (body.session_id or "")[:64],
+      }
+    )
+  except Exception:
+    raise HTTPException(502, "feedback store unavailable")
+  return {"ok": True}
+
+
+@app.get("/admin/feedback")
+def admin_feedback(x_admin_key: str = Header(default=""), limit: int = 50):
+  """Recent feedback for the weekly accuracy review (newest first)."""
+  if x_admin_key != ADMIN_KEY:
+    raise HTTPException(403, "bad admin key")
+  limit = max(1, min(limit, 200))
+  items = []
+  for fid, r in _collection_items("feedback"):
+    items.append(
+      {
+        "id": fid,
+        "user_id": r.get("user_id"),
+        "ts": _iso(r.get("ts")),
+        "vote": r.get("vote"),
+        "question": r.get("question", ""),
+        "correct_hs": r.get("correct_hs", ""),
+        "comment": r.get("comment", ""),
+        "log_id": r.get("log_id", ""),
+        "session_id": r.get("session_id", ""),
+      }
+    )
+  items.sort(key=lambda e: e["ts"] or "", reverse=True)
+  return {"feedback": items[:limit]}
+
+
 @app.get("/history")
 def history(authorization: str | None = Header(default=None)):
   claims = _verify(authorization)
@@ -559,6 +622,7 @@ def stats(x_admin_key: str = Header(default="")):
   if x_admin_key != ADMIN_KEY:
     raise HTTPException(403, "bad admin key")
   users = _collection_docs("users")
+  feedback = _collection_docs("feedback")
   payments = _collection_docs("payments")
   # Exclude P0 cost-measurement probes (user_id "measure-*") from prod stats.
   usage = [
@@ -579,6 +643,8 @@ def stats(x_admin_key: str = Header(default="")):
     "queries": len(usage),
     "est_cost_usd": round(sum(u.get("est_cost_usd", 0) for u in usage), 4),
     "grounding_calls": sum(u.get("grounding_calls", 0) for u in usage),
+    "feedback_up": sum(1 for f in feedback if f.get("vote") == "up"),
+    "feedback_down": sum(1 for f in feedback if f.get("vote") == "down"),
   }
 
 
@@ -884,7 +950,7 @@ def _is_vague_question(message: str) -> bool:
 def _log_free_query(uid, sid, message, answer):
   """Log a $0 served query (vague clarification). Never charges. Fails open."""
   try:
-    db.collection("usage_logs").add(
+    ref, _ = db.collection("usage_logs").add(
       {
         "user_id": uid,
         "ts": firestore.SERVER_TIMESTAMP,
@@ -904,8 +970,9 @@ def _log_free_query(uid, sid, message, answer):
         "free_reason": "vague_clarify",
       }
     )
+    return ref.id
   except Exception:
-    pass
+    return ""
 
 
 def _usage_row(uid, sid, message, answer, usage, attachment, cached=False) -> dict:
@@ -930,7 +997,11 @@ def _usage_row(uid, sid, message, answer, usage, attachment, cached=False) -> di
 
 
 def _charge_and_log(uid, sid, message, answer, usage, attachment, cached=False):
-  """Deduct flat-rate credits + write ledger/usage rows. Returns balance/None."""
+  """Deduct flat-rate credits + write ledger/usage rows.
+
+  Returns (balance, log_id) or None when credits are insufficient (log_id
+  links user feedback to this exact Q&A row).
+  """
   usage_ref = db.collection("usage_logs").document()
   ledger_ref = db.collection("credits_ledger").document()
 
@@ -955,7 +1026,7 @@ def _charge_and_log(uid, sid, message, answer, usage, attachment, cached=False):
       usage_ref,
       _usage_row(uid, sid, message, answer, usage, attachment, cached),
     )
-    return bal - CREDITS_PER_QUERY
+    return bal - CREDITS_PER_QUERY, usage_ref.id
 
   return _txn(db.transaction())
 
@@ -1093,16 +1164,18 @@ async def _chat_sse_gen(uid, sid, message, msg, attachment, cache_key, lang="th"
   if cache_key:
     _cache_put(cache_key, answer, usage)
   full = answer + FOOTER[lang]
-  remaining = _charge_and_log(uid, sid, message, full, usage, attachment)
-  if remaining is None:
+  charged = _charge_and_log(uid, sid, message, full, usage, attachment)
+  if charged is None:
     yield _sse("error", {"error": "insufficient_credits"})
     return
+  remaining, log_id = charged
   yield _sse(
     "done",
     {
       "answer": full,
       "session_id": sid,
       "credits_left": remaining,
+      "log_id": log_id,
       "usage": usage,
     },
   )
@@ -1199,11 +1272,12 @@ async def chat(
       "free": True,
       "capped": False,
     }
-    _log_free_query(uid, sid, message, full)
+    log_id = _log_free_query(uid, sid, message, full)
     payload = {
       "answer": full,
       "session_id": sid,
       "credits_left": user.get("credits", 0),
+      "log_id": log_id,
       "usage": usage,
     }
     if wants_sse:
@@ -1237,15 +1311,17 @@ async def chat(
         "free": False,
         "capped": False,
       }
-      remaining = _charge_and_log(
+      charged = _charge_and_log(
         uid, sid, message, full, usage, attachment, cached=True
       )
-      if remaining is None:
+      if charged is None:
         raise HTTPException(402, "insufficient_credits")
+      remaining, log_id = charged
       payload = {
         "answer": full,
         "session_id": sid,
         "credits_left": remaining,
+        "log_id": log_id,
         "usage": usage,
       }
       if wants_sse:
@@ -1265,13 +1341,15 @@ async def chat(
 
   raw, usage = await _chat_once_payload(uid, sid, msg, cache_key, message, lang, file_text)
   full = raw + FOOTER[lang]
-  remaining = _charge_and_log(uid, sid, message, full, usage, attachment)
-  if remaining is None:
+  charged = _charge_and_log(uid, sid, message, full, usage, attachment)
+  if charged is None:
     raise HTTPException(402, "insufficient_credits")
+  remaining, log_id = charged
 
   return {
     "answer": full,
     "session_id": sid,
     "credits_left": remaining,
+    "log_id": log_id,
     "usage": usage,
   }

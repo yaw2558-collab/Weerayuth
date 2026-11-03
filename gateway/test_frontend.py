@@ -95,3 +95,12 @@ def test_history_card_present():
   assert "loadHistory()" in html
   assert "histCache" in html  # clicked items render from cache, no refetch
   assert "hist_t" in html and "hist_empty" in html  # i18n keys
+
+
+def test_feedback_buttons_present():
+  html = _index_html()
+  assert "sendVote" in html and "sendDown" in html
+  assert "/feedback" in html
+  assert "correct_hs" in html
+  assert "fb_thanks" in html and "fb_hs_ph" in html  # i18n keys
+  assert "dataset.logId" in html  # fresh answers link to their log row

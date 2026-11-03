@@ -18,6 +18,7 @@ FAKE = {
     {"status": "succeeded", "livemode": True, "amount_thb": 450, "credits": 500},
     {"status": "failed", "livemode": True, "amount_thb": 100, "credits": 0},
   ],
+  "feedback": [{"vote": "up"}, {"vote": "up"}, {"vote": "down"}, {}],
   "usage_logs": [
     {"est_cost_usd": 0.05, "grounding_calls": 2},
     {"est_cost_usd": 0.03, "grounding_calls": 0},
@@ -63,6 +64,8 @@ def test_stats_aggregates(monkeypatch):
     "credits_sold": 600,
     "queries": 2,
     "est_cost_usd": 0.08,
+    "feedback_up": 2,
+    "feedback_down": 1,
     "grounding_calls": 2,
   }
 
