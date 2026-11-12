@@ -34,6 +34,14 @@ def test_admin_page_serves():
   assert "รายชื่อผู้ใช้" in r.text  # per-user table section
   assert "/admin/users" in r.text
 
+def test_admin_page_shows_feedback_table():
+  r = client.get("/admin")
+  assert r.status_code == 200
+  assert "/admin/feedback" in r.text
+  assert "ความคิดเห็นผู้ใช้" in r.text
+  assert 'id="fb"' in r.text
+  assert "รหัสที่ถูก" in r.text  # down-vote correction column
+
 
 def test_logo_serves():
   r = client.get("/logo.svg")
