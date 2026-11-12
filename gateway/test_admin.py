@@ -42,6 +42,11 @@ def test_admin_page_shows_feedback_table():
   assert 'id="fb"' in r.text
   assert "รหัสที่ถูก" in r.text  # down-vote correction column
 
+def test_admin_page_shows_thai_time():
+  r = client.get("/admin")
+  assert r.status_code == 200
+  assert "Asia/Bangkok" in r.text  # short() renders ICT, not raw UTC
+
 
 def test_logo_serves():
   r = client.get("/logo.svg")
