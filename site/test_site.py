@@ -91,3 +91,16 @@ def test_search_console_verification_file():
     encoding="utf-8"
   )
   assert "google-site-verification: google7afe2f2864abf11a.html" in txt
+
+
+def test_visionassist_privacy_page():
+  html = (SITE_INDEX.parent / "visionassist-privacy.html").read_text(
+    encoding="utf-8"
+  )
+  assert "<h1>นโยบายความเป็นส่วนตัว" in html  # Thai section
+  assert "Privacy Policy" in html  # English section
+  assert "ไม่เก็บไฟล์รูปไว้" in html  # photos not stored
+  assert "ไม่ส่งพิกัดขึ้นเซิร์ฟเวอร์" in html  # location on-device
+  assert "mailto:yaw2558@gmail.com" in html  # contact
+  xml = (SITE_INDEX.parent / "sitemap.xml").read_text(encoding="utf-8")
+  assert "visionassist-privacy.html</loc>" in xml
