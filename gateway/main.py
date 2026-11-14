@@ -7,6 +7,7 @@
 - File attachments: images (vision) + xlsx/pdf/docx/csv/txt (text extract)
 - Stripe top-up: GET /billing/packages, POST /billing/checkout, POST /billing/webhook
   (card + PromptPay; webhook also handles async payment events)
+- Play Billing: GET /billing/play/products, POST /billing/play/verify (Android app top-ups)
 - POST /chat streams SSE when Accept: text/event-stream, else returns JSON
 - Text-only answers are cached in answer_cache (30d TTL) for instant repeats
 - Vague questions get a free template clarification (no model call, no charge)
@@ -1367,3 +1368,7 @@ async def chat(
 from gateway.vision import mount as _mount_vision
 
 _mount_vision(app)
+
+from gateway.play_billing import mount as _mount_play
+
+_mount_play(app)

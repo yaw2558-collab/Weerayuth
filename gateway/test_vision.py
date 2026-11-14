@@ -277,7 +277,7 @@ def test_scan_charges_scan_price_not_full_price(monkeypatch):
   _charge_ok(monkeypatch, calls)
   r = _post("/vision/scan", {"image": PNG_1PX})
   assert r.status_code == 200
-  assert vision.VISION_SCAN_CREDITS == 2  # decided 2026-11-13: scan is cheap
+  assert vision.VISION_SCAN_CREDITS == 1  # decided 2026-11-14: 2/scan drained bonus in ~40s
   assert calls[0]["kw"]["credits"] == vision.VISION_SCAN_CREDITS
 
 
@@ -293,7 +293,7 @@ def test_ask_keeps_full_price(monkeypatch):
 
 
 def test_scan_preamble_uses_scan_price_threshold(monkeypatch):
-  # 5 credits: enough for a 2-credit scan, not for a 10-credit ask
+  # 5 credits: enough for a 1-credit scan, not for a 10-credit ask
   _auth(monkeypatch, credits=5)
   _model(monkeypatch, SCAN_OK)
   calls = []

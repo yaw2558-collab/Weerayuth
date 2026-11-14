@@ -18,7 +18,7 @@ Database: `(default)` in `asia-southeast1`.
 | user_id | string    |                                    |
 | ts      | timestamp | server time                        |
 | delta   | number    | +topup / -usage (THB credits)      |
-| reason  | string    | `topup:stripe:<id>` / `chat:<log>` / `vision:<log>` |
+| reason  | string    | `topup:stripe:<id>` / `topup:play:<id>` / `chat:<log>` / `vision:<log>` |
 
 ## usage_logs/{auto-id}
 

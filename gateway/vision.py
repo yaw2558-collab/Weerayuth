@@ -28,7 +28,7 @@ from google.genai import types as genai_types
 
 VISION_MODEL = "gemini-2.5-flash"  # same model/quota pool as the customs agent
 VISION_CREDITS_PER_QUERY = 10  # describe/ask flat rate, same as chat
-VISION_SCAN_CREDITS = 2  # scan fires every ~2.5s; priced for cadence, not cost
+VISION_SCAN_CREDITS = 1  # scan fires every ~2.5s; 1 credit since 2026-11-14 (was 2)
 VISION_RATE_LIMIT_S = 2  # scan cadence (~2.5s) can't survive the 20s chat limit
 VISION_MAX_IMAGE_MB = 5
 VISION_MAX_QUESTION_CHARS = 2000

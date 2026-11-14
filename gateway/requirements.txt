@@ -10,3 +10,4 @@ python-docx
 python-multipart
 stripe
 python-dotenv
+google-api-python-client
