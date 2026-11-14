@@ -104,3 +104,15 @@ def test_visionassist_privacy_page():
   assert "mailto:yaw2558@gmail.com" in html  # contact
   xml = (SITE_INDEX.parent / "sitemap.xml").read_text(encoding="utf-8")
   assert "visionassist-privacy.html</loc>" in xml
+
+
+def test_visionassist_delete_page():
+  html = (SITE_INDEX.parent / "visionassist-delete.html").read_text(
+    encoding="utf-8"
+  )
+  assert "ขอลบข้อมูล VisionAssist" in html  # Thai steps
+  assert "data deletion request" in html  # English steps
+  assert "30 วัน" in html  # retention promise
+  assert "mailto:yaw2558@gmail.com" in html
+  xml = (SITE_INDEX.parent / "sitemap.xml").read_text(encoding="utf-8")
+  assert "visionassist-delete.html</loc>" in xml
