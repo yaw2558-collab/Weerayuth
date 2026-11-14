@@ -12,6 +12,7 @@
 - Vague questions get a free template clarification (no model call, no charge)
 - Runs stop after MAX_GROUNDING_QUERIES unique searches (breaker fallback)
 - Serves minimal chat frontend at /
+- VisionAssist: POST /vision/describe|ask|scan (same auth/credits; rows tagged feature="vision")
 
 Run locally from thai-customs/ (reads gateway/.env if present):
     ..\\.venv\\Scripts\\uvicorn gateway.main:app --port 8001
@@ -547,6 +548,8 @@ def history(authorization: str | None = Header(default=None)):
   for r in _user_usage(claims["uid"]):
     if r.get("free_reason"):
       continue  # free clarifications never had a real answer
+    if r.get("feature") == "vision":
+      continue  # VisionAssist rows live in the app, not customs history
     items.append(
       {
         "question": r.get("question", ""),
@@ -975,9 +978,9 @@ def _log_free_query(uid, sid, message, answer):
     return ""
 
 
-def _usage_row(uid, sid, message, answer, usage, attachment, cached=False) -> dict:
+def _usage_row(uid, sid, message, answer, usage, attachment, cached=False, extra=None) -> dict:
   """usage_logs row (pure builder so the persisted shape is testable)."""
-  return {
+  row = {
     "user_id": uid,
     "ts": firestore.SERVER_TIMESTAMP,
     "session_id": sid,
@@ -994,13 +997,17 @@ def _usage_row(uid, sid, message, answer, usage, attachment, cached=False) -> di
     "attachment": attachment,
     "capped": bool(usage.get("capped", False)),
   }
+  if extra:
+    row.update(extra)
+  return row
 
 
-def _charge_and_log(uid, sid, message, answer, usage, attachment, cached=False):
+def _charge_and_log(uid, sid, message, answer, usage, attachment, cached=False, credits=CREDITS_PER_QUERY, reason_prefix="chat", extra=None):
   """Deduct flat-rate credits + write ledger/usage rows.
 
   Returns (balance, log_id) or None when credits are insufficient (log_id
-  links user feedback to this exact Q&A row).
+  links user feedback to this exact Q&A row). VisionAssist passes its
+  own credits/reason_prefix/extra.
   """
   usage_ref = db.collection("usage_logs").document()
   ledger_ref = db.collection("credits_ledger").document()
@@ -1010,23 +1017,23 @@ def _charge_and_log(uid, sid, message, answer, usage, attachment, cached=False):
     ref = _user_ref(uid)
     snap = ref.get(transaction=txn)
     bal = (snap.to_dict() or {}).get("credits", 0)
-    if bal < CREDITS_PER_QUERY:
+    if bal < credits:
       return None
-    txn.update(ref, {"credits": bal - CREDITS_PER_QUERY})
+    txn.update(ref, {"credits": bal - credits})
     txn.set(
       ledger_ref,
       {
         "user_id": uid,
         "ts": firestore.SERVER_TIMESTAMP,
-        "delta": -CREDITS_PER_QUERY,
-        "reason": f"chat:{usage_ref.id}",
+        "delta": -credits,
+        "reason": f"{reason_prefix}:{usage_ref.id}",
       },
     )
     txn.set(
       usage_ref,
-      _usage_row(uid, sid, message, answer, usage, attachment, cached),
+      _usage_row(uid, sid, message, answer, usage, attachment, cached, extra),
     )
-    return bal - CREDITS_PER_QUERY, usage_ref.id
+    return bal - credits, usage_ref.id
 
   return _txn(db.transaction())
 
@@ -1353,3 +1360,10 @@ async def chat(
     "log_id": log_id,
     "usage": usage,
   }
+
+
+# VisionAssist lives in its own module (imported last so vision can reuse
+# the helpers above; mount() defers its own main import, so order is safe).
+from gateway.vision import mount as _mount_vision
+
+_mount_vision(app)

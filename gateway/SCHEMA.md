@@ -18,7 +18,7 @@ Database: `(default)` in `asia-southeast1`.
 | user_id | string    |                                    |
 | ts      | timestamp | server time                        |
 | delta   | number    | +topup / -usage (THB credits)      |
-| reason  | string    | `topup:stripe:<id>` / `chat:<log>` |
+| reason  | string    | `topup:stripe:<id>` / `chat:<log>` / `vision:<log>` |
 
 ## usage_logs/{auto-id}
 
@@ -37,6 +37,7 @@ Written by `POST /chat` (Phase 0+).
 | grounding_calls   | number    | events with grounding data   |
 | latency_s         | number    | end-to-end seconds           |
 | est_cost_usd      | number    | priced estimate (calibrated) |
+| feature           | string    | `vision` on VisionAssist rows (absent = customs chat) |
 
 ## feedback/{auto-id} (P0 accuracy loop)
 
