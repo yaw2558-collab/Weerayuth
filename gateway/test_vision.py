@@ -39,13 +39,15 @@ USAGE = {
 }
 
 
-def _auth(monkeypatch, credits=30, consent=True):
+def _auth(monkeypatch, credits=30, consent=True, bonus=True):
   monkeypatch.setattr(
     main, "_verify", lambda auth: {"uid": "user1", "email": "u@x.co"}
   )
   user = {"credits": credits}
   if consent:
     user["consent_ts"] = "yes"
+  if bonus:
+    user["bonus_vision_ts"] = "yes"
   monkeypatch.setattr(main, "_get_or_create_user", lambda uid, email: user)
   vision._vision_last_call.clear()
 
@@ -300,6 +302,46 @@ def test_scan_preamble_uses_scan_price_threshold(monkeypatch):
   _charge_ok(monkeypatch, calls)
   assert _post("/vision/scan", {"image": PNG_1PX}).status_code == 200
   assert _post("/vision/ask", {"question": "q"}).status_code == 402
+
+
+def test_vision_first_call_grants_trial_bonus(monkeypatch):
+  # App-only trial: 30 signup + 70 = 100 total. A 5-credit user can't afford
+  # ask (10) until the one-time bonus lands.
+  _auth(monkeypatch, credits=5, bonus=False)
+  _model(monkeypatch, "ok")
+  grants = []
+  monkeypatch.setattr(
+    main,
+    "_grant_credits",
+    lambda uid, credits, reason: grants.append((uid, credits, reason))
+    or 75,
+  )
+  updates = []
+
+  class _Ref:
+    def update(self, data):
+      updates.append(data)
+
+  monkeypatch.setattr(main, "_user_ref", lambda uid: _Ref())
+  calls = []
+  _charge_ok(monkeypatch, calls)
+  r = _post("/vision/ask", {"question": "q"})
+  assert r.status_code == 200
+  assert grants == [("user1", 70, "bonus:vision_trial")]
+  assert len(updates) == 1 and "bonus_vision_ts" in updates[0]
+
+
+def test_vision_bonus_granted_once(monkeypatch):
+  _auth(monkeypatch)  # bonus flag already set
+
+  def _boom(uid, credits, reason):
+    raise AssertionError("trial bonus must be granted once")
+
+  monkeypatch.setattr(main, "_grant_credits", _boom)
+  _model(monkeypatch, SCAN_OK)
+  calls = []
+  _charge_ok(monkeypatch, calls)
+  assert _post("/vision/scan", {"image": PNG_1PX}).status_code == 200
 
 
 def test_scan_requests_json_mode_with_full_budget(monkeypatch):

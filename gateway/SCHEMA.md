@@ -10,6 +10,7 @@ Database: `(default)` in `asia-southeast1`.
 | credits  | number    | current balance (THB credits)  |
 | created  | timestamp | first seen                     |
 | consent  | timestamp | PDPA consent time (Phase 1+)   |
+| bonus_vision_ts | timestamp | app +70 trial granted (else absent) |
 
 ## credits_ledger/{auto-id}
 

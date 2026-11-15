@@ -10,6 +10,9 @@ JSON in/out (the shape the mobile app speaks):
   POST /vision/ask       {"question": "..."}    -> Thai answer
   POST /vision/scan      {"image": "<base64>"}  -> {hazard, alert, confidence}
 
+App users get a one-time +70 trial top-up on their first vision call
+(30 signup + 70 = 100 total); web users keep the 30 signup bonus.
+
 Mounted via mount(app) from the bottom of gateway.main — the deferred
 import inside mount() keeps module import order irrelevant.
 """
@@ -29,6 +32,7 @@ from google.genai import types as genai_types
 
 VISION_MODEL = "gemini-2.5-flash"  # same model/quota pool as the customs agent
 VISION_CREDITS_PER_QUERY = 10  # describe/ask flat rate, same as chat
+VISION_TRIAL_BONUS = 70  # one-time, app users only: 30 signup + 70 = 100
 VISION_SCAN_CREDITS = 1  # scan fires every ~2.5s; 1 credit since 2026-11-14 (was 2)
 VISION_RATE_LIMIT_S = 2  # scan cadence (~2.5s) can't survive the 20s chat limit
 VISION_MAX_IMAGE_MB = 5
@@ -117,6 +121,17 @@ def _preamble(
   if not user.get("consent_ts"):
     raise HTTPException(403, "consent_required")
   _check_vision_rate(uid)
+  if not user.get("bonus_vision_ts"):
+    # One-time trial top-up for app users (web users never reach this).
+    # Check-then-set races only under concurrent first calls (unlikely
+    # behind the 2s rate limit); worst case is one extra +70, not a loop.
+    balance = _main._grant_credits(
+      uid, VISION_TRIAL_BONUS, "bonus:vision_trial"
+    )
+    _main._user_ref(uid).update(
+      {"bonus_vision_ts": _main.firestore.SERVER_TIMESTAMP}
+    )
+    user["credits"] = balance
   if user.get("credits", 0) < credits:
     raise HTTPException(402, "insufficient_credits")
   return uid
