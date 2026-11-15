@@ -52,7 +52,7 @@ def _auth(monkeypatch, credits=30, consent=True):
 
 def _model(monkeypatch, text):
   monkeypatch.setattr(
-    vision, "_call_model", lambda contents, maxtok: (text, USAGE)
+    vision, "_call_model", lambda contents, maxtok, **kw: (text, USAGE)
   )
 
 
@@ -300,3 +300,24 @@ def test_scan_preamble_uses_scan_price_threshold(monkeypatch):
   _charge_ok(monkeypatch, calls)
   assert _post("/vision/scan", {"image": PNG_1PX}).status_code == 200
   assert _post("/vision/ask", {"question": "q"}).status_code == 402
+
+
+def test_scan_requests_json_mode_with_full_budget(monkeypatch):
+  # Regression: scan's 128-token budget was eaten by thinking tokens, so the
+  # model reply was truncated ("```json\n{\"") and every scan 502'd. Scan now
+  # requests JSON mode with a 512-token budget.
+  _auth(monkeypatch)
+  seen = {}
+
+  def fake(contents, maxtok, **kw):
+    seen["maxtok"] = maxtok
+    seen.update(kw)
+    return (SCAN_OK, USAGE)
+
+  monkeypatch.setattr(vision, "_call_model", fake)
+  calls = []
+  _charge_ok(monkeypatch, calls)
+  r = _post("/vision/scan", {"image": PNG_1PX})
+  assert r.status_code == 200
+  assert seen["maxtok"] == 512
+  assert seen.get("json_mode") is True

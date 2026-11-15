@@ -17,6 +17,7 @@ import inside mount() keeps module import order irrelevant.
 import base64
 import binascii
 import json
+import logging
 import time
 import uuid
 
@@ -35,6 +36,8 @@ VISION_MAX_QUESTION_CHARS = 2000
 VISION_MAX_ALERT_CHARS = 500
 
 router = APIRouter(prefix="/vision")
+
+logger = logging.getLogger(__name__)
 
 _vision_last_call: dict[str, float] = {}
 _client: Client | None = None
@@ -70,15 +73,18 @@ def _genai_client() -> Client:
   return _client
 
 
-def _call_model(contents: list, max_output_tokens: int) -> tuple[str, dict]:
+def _call_model(
+  contents: list, max_output_tokens: int, *, json_mode: bool = False
+) -> tuple[str, dict]:
   """Single-shot model call. Returns (text, usage). Tests patch this seam."""
   t0 = time.time()
+  cfg_kwargs: dict = {"max_output_tokens": max_output_tokens}
+  if json_mode:
+    cfg_kwargs["response_mime_type"] = "application/json"
   resp = _genai_client().models.generate_content(
     model=VISION_MODEL,
     contents=contents,
-    config=genai_types.GenerateContentConfig(
-      max_output_tokens=max_output_tokens
-    ),
+    config=genai_types.GenerateContentConfig(**cfg_kwargs),
   )
   text = (resp.text or "").strip()
   if not text:
@@ -302,12 +308,16 @@ def scan(body: ScanIn, authorization: str | None = Header(default=None)):
     genai_types.Part(text=_SCAN_PROMPT),
   ]
   try:
-    text, usage = _call_model(contents, 128)
+    text, usage = _call_model(contents, 512, json_mode=True)
   except HTTPException:
     raise
   except Exception:
     raise HTTPException(502, "model unavailable")
-  parsed = _parse_scan_json(text)
+  try:
+    parsed = _parse_scan_json(text)
+  except HTTPException:
+    logger.warning("scan parse failed: %r", text[:300])
+    raise
   remaining, log_id = _charge(
     uid,
     "[vision scan]",
