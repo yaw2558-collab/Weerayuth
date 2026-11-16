@@ -106,6 +106,16 @@ def test_visionassist_privacy_page():
   assert "visionassist-privacy.html</loc>" in xml
 
 
+def test_homepage_links_privacy():
+  html = SITE_INDEX.read_text(encoding="utf-8")
+  assert 'href="visionassist-privacy.html"' in html  # footer link
+  assert 'data-i18n="foot_privacy"' in html
+  assert "นโยบายความเป็นส่วนตัว VisionAssist" in html  # TH default
+  js = (SITE_INDEX.parent / "script.js").read_text(encoding="utf-8")
+  assert 'foot_privacy: "VisionAssist Privacy Policy"' in js
+  assert 'foot_privacy: "VisionAssist 隐私政策"' in js
+
+
 def test_visionassist_delete_page():
   html = (SITE_INDEX.parent / "visionassist-delete.html").read_text(
     encoding="utf-8"
