@@ -139,3 +139,64 @@ def test_users_lists_per_user_totals(monkeypatch):
   assert users[0]["created"] == t1.isoformat()
   assert users[1]["queries"] == 0 and users[1]["last_ts"] is None
   assert all(u["uid"] != "measure-1-x" for u in users)
+
+
+def test_users_source_marks_app_web_both(monkeypatch):
+  monkeypatch.setattr(main, "ADMIN_KEY", "secret")
+  t1 = datetime(2026, 11, 15, 1, 0, tzinfo=timezone.utc)
+  monkeypatch.setattr(
+    main,
+    "_collection_items",
+    lambda name: [
+      ("app1", {"email": None, "credits": 90, "created": t1}),
+      ("web1", {"email": "w@x.co", "credits": 20, "created": t1}),
+      ("both1", {"email": "b@x.co", "credits": 20, "created": t1}),
+      ("idle1", {"email": None, "credits": 30, "created": t1}),
+    ],
+  )
+  monkeypatch.setattr(
+    main,
+    "_collection_docs",
+    lambda name: [
+      {
+        "user_id": "app1",
+        "feature": "vision",
+        "est_cost_usd": 0.01,
+        "grounding_calls": 0,
+        "ts": t1,
+      },
+      {
+        "user_id": "web1",
+        "est_cost_usd": 0.02,
+        "grounding_calls": 1,
+        "ts": t1,
+      },
+      {
+        "user_id": "both1",
+        "feature": "vision",
+        "est_cost_usd": 0.01,
+        "grounding_calls": 0,
+        "ts": t1,
+      },
+      {
+        "user_id": "both1",
+        "est_cost_usd": 0.02,
+        "grounding_calls": 1,
+        "ts": t1,
+      },
+    ],
+  )
+  r = client.get("/admin/users", headers={"x-admin-key": "secret"})
+  assert r.status_code == 200
+  by_uid = {u["uid"]: u for u in r.json()["users"]}
+  assert by_uid["app1"]["source"] == "app"
+  assert by_uid["web1"]["source"] == "web"
+  assert by_uid["both1"]["source"] == "both"
+  assert by_uid["idle1"]["source"] == ""
+
+
+def test_admin_page_shows_source_column():
+  r = client.get("/admin")
+  assert r.status_code == 200
+  assert "ช่องทาง" in r.text
+  assert "ทั้งคู่" in r.text  # app+web mapping label

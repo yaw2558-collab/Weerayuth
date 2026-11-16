@@ -668,6 +668,7 @@ def admin_users(x_admin_key: str = Header(default="")):
       "grounding_calls": 0,
       "last_ts": None,
     }
+  _src: dict[str, set] = {}
   for row in _collection_docs("usage_logs"):
     uid = str(row.get("user_id", ""))
     if uid.startswith("measure-"):
@@ -686,6 +687,7 @@ def admin_users(x_admin_key: str = Header(default="")):
       },
     )
     e["queries"] += 1
+    _src.setdefault(uid, set()).add("app" if row.get("feature") == "vision" else "web")
     e["est_cost_usd"] = round(
       e["est_cost_usd"] + (row.get("est_cost_usd") or 0), 4
     )
@@ -693,6 +695,9 @@ def admin_users(x_admin_key: str = Header(default="")):
     ts = _iso(row.get("ts"))
     if ts and (e["last_ts"] is None or ts > e["last_ts"]):
       e["last_ts"] = ts
+  for uid, e in per.items():
+    f = _src.get(uid, set())
+    e["source"] = "both" if len(f) > 1 else (next(iter(f)) if f else "")
   act = sorted(
     (e for e in per.values() if e["last_ts"]),
     key=lambda e: e["last_ts"],
