@@ -20,10 +20,15 @@ AUTH = {"Authorization": "Bearer [REDACTED]"}
 
 
 def _fake_purchase(monkeypatch, **over):
+  calls = over.pop("calls", None)
   p = {"orderId": "GPA.1234-5678-9012-34567", "purchaseState": 0,
        "productId": "credits_100"}
   p.update(over)
-  monkeypatch.setattr(play, "_fetch_play_purchase", lambda pid, tok: p)
+  def fake(package, pid, tok):
+    if calls is not None:
+      calls.append((package, pid, tok))
+    return p
+  monkeypatch.setattr(play, "_fetch_play_purchase", fake)
   return p
 
 
@@ -133,3 +138,40 @@ def test_play_verify_unconfigured_without_key(monkeypatch):
                   json={"product_id": "credits_100", "purchase_token": "tok"},
                   headers=AUTH)
   assert r.status_code == 500
+
+
+def test_play_verify_defaults_to_visionassist_package(monkeypatch):
+  calls = []
+  _fake_purchase(monkeypatch, calls=calls)
+  grants, records = _wired(monkeypatch)
+  r = client.post("/billing/play/verify",
+                  json={"product_id": "credits_100", "purchase_token": "tok"},
+                  headers=AUTH)
+  assert r.status_code == 200
+  assert calls == [("com.visionassist.app", "credits_100", "tok")]
+  assert records[0][1]["package"] == "com.visionassist.app"
+
+
+def test_play_verify_accepts_thaicustoms_package(monkeypatch):
+  calls = []
+  _fake_purchase(monkeypatch, calls=calls)
+  grants, records = _wired(monkeypatch)
+  r = client.post("/billing/play/verify",
+                  json={"product_id": "credits_100", "purchase_token": "tok",
+                        "package_name": "com.thaicustoms.app"},
+                  headers=AUTH)
+  assert r.status_code == 200
+  assert calls == [("com.thaicustoms.app", "credits_100", "tok")]
+  assert records[0][1]["package"] == "com.thaicustoms.app"
+
+
+def test_play_verify_rejects_unknown_package(monkeypatch):
+  calls = []
+  _fake_purchase(monkeypatch, calls=calls)
+  grants, records = _wired(monkeypatch)
+  r = client.post("/billing/play/verify",
+                  json={"product_id": "credits_100", "purchase_token": "tok",
+                        "package_name": "com.evil.app"},
+                  headers=AUTH)
+  assert r.status_code == 400
+  assert calls == [] and grants == [] and records == []

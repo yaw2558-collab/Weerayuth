@@ -4,12 +4,13 @@ The Android app sells consumable credit packs via Play Billing, then posts
 the purchase token here. We verify it with the Play Developer API and grant
 credits (idempotent on orderId, ledger reason "topup:play:<order_id>").
 
-Play product IDs (create these exact IDs in Play Console, one-time products):
+Play product IDs (create these exact IDs in Play Console, one-time products,
+separately under EACH app — Play products are per-package):
   credits_100 / credits_500 / credits_1000  (mirror of the web packs)
 
 JSON in/out:
   GET  /billing/play/products  -> [{product_id, credits, thb}]
-  POST /billing/play/verify    {"product_id","purchase_token"} -> {ok, credits, balance}
+  POST /billing/play/verify    {"product_id","purchase_token"[,"package_name"]} -> {ok, credits, balance}
 
 The app MUST finishTransaction (consume) only after this endpoint answers
 ok — an un-acked Play purchase is auto-refunded after 3 days.
@@ -26,6 +27,9 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 PLAY_PACKAGE = "com.visionassist.app"
+# All Play packages this server verifies purchases for. Old app builds omit
+# package_name and verify against PLAY_PACKAGE (backward compatible).
+PLAY_PACKAGES = frozenset({PLAY_PACKAGE, "com.thaicustoms.app"})
 PLAY_PRODUCTS = {
   "credits_100": {"credits": 100, "thb": 100},
   "credits_500": {"credits": 500, "thb": 450},
@@ -40,6 +44,7 @@ _main = None  # gateway.main, set by mount()
 class VerifyIn(BaseModel):
   product_id: str
   purchase_token: str
+  package_name: str = PLAY_PACKAGE
 
 
 def mount(app) -> None:
@@ -52,7 +57,7 @@ def mount(app) -> None:
   app.include_router(router)
 
 
-def _fetch_play_purchase(product_id: str, token: str) -> dict:
+def _fetch_play_purchase(package: str, product_id: str, token: str) -> dict:
   """Query the Play Developer API. Tests patch this seam."""
   raw = os.environ.get("PLAY_SERVICE_ACCOUNT_JSON", "")
   if not raw:
@@ -71,7 +76,7 @@ def _fetch_play_purchase(product_id: str, token: str) -> dict:
     return (
       svc.purchases()
       .products()
-      .get(packageName=PLAY_PACKAGE, productId=product_id, token=token)
+      .get(packageName=package, productId=product_id, token=token)
       .execute()
     )
   except Exception as e:
@@ -94,9 +99,11 @@ def play_verify(body: VerifyIn, authorization: str | None = Header(default=None)
   info = PLAY_PRODUCTS.get(body.product_id)
   if info is None:
     raise HTTPException(400, "unknown product_id")
+  if body.package_name not in PLAY_PACKAGES:
+    raise HTTPException(400, "unknown package_name")
   if not body.purchase_token:
     raise HTTPException(400, "missing purchase_token")
-  p = _fetch_play_purchase(body.product_id, body.purchase_token)
+  p = _fetch_play_purchase(body.package_name, body.product_id, body.purchase_token)
   order_id = p.get("orderId")
   if p.get("purchaseState") != 0 or not order_id:
     raise HTTPException(400, "purchase not completed")
@@ -114,6 +121,7 @@ def play_verify(body: VerifyIn, authorization: str | None = Header(default=None)
     {
       "user_id": uid,
       "provider": "play",
+      "package": body.package_name,
       "livemode": live,
       "amount_thb": info["thb"],
       "credits": info["credits"],

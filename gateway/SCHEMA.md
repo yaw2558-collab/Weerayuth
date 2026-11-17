@@ -64,7 +64,8 @@ Doc id = Stripe Checkout Session id (webhook idempotency key).
 |------------|-----------|--------------------------------|
 | user_id    | string    |                                |
 | ts         | timestamp | webhook time                   |
-| provider   | string    | `stripe`                       |
+| provider   | string    | `stripe` / `play`              |
+| package    | string    | Play package (`play` only)     |
 | livemode   | boolean   | true = real money              |
 | amount_thb | number    | charged amount                 |
 | credits    | number    | granted credits                |
