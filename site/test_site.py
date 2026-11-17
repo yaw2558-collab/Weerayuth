@@ -136,3 +136,38 @@ def test_homepage_links_web_privacy():
   js = (SITE_INDEX.parent / "script.js").read_text(encoding="utf-8")
   assert 'foot_privacy_web: "Privacy Policy"' in js
   assert 'foot_privacy_web: "隐私政策"' in js
+
+
+def test_thaicustoms_privacy_page():
+  html = (SITE_INDEX.parent / "thaicustoms-privacy.html").read_text(
+    encoding="utf-8"
+  )
+  assert "<h1>นโยบายความเป็นส่วนตัว" in html  # Thai section
+  assert "Privacy Policy" in html  # English section
+  assert "ไม่เก็บเนื้อหาไฟล์" in html  # attachments processed in memory
+  assert "Google Play" in html  # in-app billing disclosure
+  assert "mailto:yaw2558@gmail.com" in html  # contact
+  xml = (SITE_INDEX.parent / "sitemap.xml").read_text(encoding="utf-8")
+  assert "thaicustoms-privacy.html</loc>" in xml
+
+
+def test_thaicustoms_delete_page():
+  html = (SITE_INDEX.parent / "thaicustoms-delete.html").read_text(
+    encoding="utf-8"
+  )
+  assert "ขอลบข้อมูล ThaiCustoms" in html  # Thai steps
+  assert "data deletion request" in html  # English steps
+  assert "30 วัน" in html  # retention promise
+  assert "mailto:yaw2558@gmail.com" in html
+  xml = (SITE_INDEX.parent / "sitemap.xml").read_text(encoding="utf-8")
+  assert "thaicustoms-delete.html</loc>" in xml
+
+
+def test_homepage_links_thaicustoms_app_privacy():
+  html = SITE_INDEX.read_text(encoding="utf-8")
+  assert 'href="thaicustoms-privacy.html"' in html  # footer link
+  assert 'data-i18n="foot_privacy_tcapp"' in html
+  assert "นโยบายความเป็นส่วนตัว ThaiCustoms (แอพ)" in html  # TH default
+  js = (SITE_INDEX.parent / "script.js").read_text(encoding="utf-8")
+  assert 'foot_privacy_tcapp: "ThaiCustoms App Privacy Policy"' in js
+  assert 'foot_privacy_tcapp: "ThaiCustoms 应用隐私政策"' in js
