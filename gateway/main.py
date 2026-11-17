@@ -1,6 +1,6 @@
 """thai-customs product gateway (Phase 2).
 
-- Firebase ID token auth (all endpoints except /healthz, /, /billing/packages, /billing/webhook)
+- Firebase ID token auth (all endpoints except /healthz, /, /privacy, /billing/packages, /billing/webhook)
 - Flat-rate credits: 10 credits/query, 1 credit = 1 THB
 - New users get 30 bonus credits (3 trial queries)
 - Consent required before first chat (POST /consent)
@@ -437,6 +437,11 @@ def index():
 @app.get("/admin")
 def admin_page():
   return FileResponse(Path(__file__).parent / "static" / "admin.html")
+
+
+@app.get("/privacy")
+def privacy_page():
+  return FileResponse(Path(__file__).parent / "static" / "privacy.html")
 
 
 @app.get("/logo.svg")

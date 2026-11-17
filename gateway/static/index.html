@@ -168,6 +168,7 @@ body:not(.in) .side-col{order:-1}
 <div class="card" id="consentbox" style="display:none">
 <h3 data-i18n="consent_t">ขอความยินยอม</h3>
 <div class="hint" data-i18n="consent_d">ยินยอมให้บันทึกคำถาม-คำตอบเพื่อปรับปรุงบริการ (จำเป็นก่อนเริ่มถาม)</div>
+<div class="hint"><a href="/privacy" data-i18n="privacy_link">นโยบายความเป็นส่วนตัว</a></div>
 <div class="row">
 <label><input type="checkbox" id="consent" style="width:auto"> <span data-i18n="consent_yes">ยินยอม</span></label>
 <button class="small" onclick="giveConsent()" data-i18n="consent_ok">ยืนยัน</button>
@@ -196,7 +197,7 @@ body:not(.in) .side-col{order:-1}
 </div>
 
 <footer><span data-i18n="footer_lead">สนใจใช้บริการนำเข้า/ปรึกษาพิกัดเพิ่มเติม ติดต่อเรา:</span>
-<a href="https://lin.ee/Z55Jn7C">LINE OA</a> · <a href="https://www.facebook.com/profile.php?id=61595424853789">Facebook</a> · <a href="mailto:yaw2558@gmail.com">yaw2558@gmail.com</a></footer>
+<a href="https://lin.ee/Z55Jn7C">LINE OA</a> · <a href="https://www.facebook.com/profile.php?id=61595424853789">Facebook</a> · <a href="mailto:yaw2558@gmail.com">yaw2558@gmail.com</a> · <a href="/privacy" data-i18n="privacy_link">นโยบายความเป็นส่วนตัว</a></footer>
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -210,6 +211,8 @@ const ZH={_title:'泰国海关顾问',brand_t:'泰国海关顾问',brand_s:'用A
 EN.fb_thanks='Thanks for the feedback';EN.fb_hs_ph='Correct code (if known)';EN.fb_cmt_ph='Tell us more (optional)';EN.fb_send='Send';
 THD.fb_thanks='ขอบคุณสำหรับ feedback ครับ';THD.fb_hs_ph='พิกัดที่ถูก (ถ้าทราบ)';THD.fb_cmt_ph='บอกเราเพิ่ม (ถ้ามี)';THD.fb_send='ส่ง';
 ZH.fb_thanks='感谢您的反馈';ZH.fb_hs_ph='正确的编码（如知道）';ZH.fb_cmt_ph='补充说明（选填）';ZH.fb_send='发送';
+EN.privacy_link='Privacy policy';
+ZH.privacy_link='隐私政策';
 const origTitle=document.title;
 function lang(){try{const v=localStorage.getItem('tc-lang');return v==='en'||v==='zh'?v:'th';}catch(e){return 'th';}}
 function T(k){const l=lang();return l==='en'?(EN[k]||k):l==='zh'?(ZH[k]||k):(THD[k]||k);}

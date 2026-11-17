@@ -104,3 +104,21 @@ def test_feedback_buttons_present():
   assert "correct_hs" in html
   assert "fb_thanks" in html and "fb_hs_ph" in html  # i18n keys
   assert "dataset.logId" in html  # fresh answers link to their log row
+
+
+def test_privacy_page_served():
+  r = client.get("/privacy")
+  assert r.status_code == 200
+  assert "นโยบายความเป็นส่วนตัว" in r.text  # Thai section
+  assert "Privacy Policy" in r.text  # English section
+  assert "mailto:yaw2558@gmail.com" in r.text  # contact
+  assert "Stripe" in r.text  # payments via Stripe, no card storage
+  assert "asia-southeast1" in r.text  # storage region
+
+
+def test_index_links_privacy_policy():
+  html = _index_html()
+  assert html.count('href="/privacy"') == 2  # footer + consent box
+  assert html.count('data-i18n="privacy_link"') == 2
+  assert "EN.privacy_link='Privacy policy'" in html
+  assert "ZH.privacy_link='隐私政策'" in html

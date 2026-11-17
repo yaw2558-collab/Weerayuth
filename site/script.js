@@ -102,6 +102,7 @@
     contact_mail: "Email",
     foot_manual: "Manual (PDF)",
     foot_privacy: "VisionAssist Privacy Policy",
+    foot_privacy_web: "Privacy Policy",
     copy: "© {Y} ซอฟแวร์ดีดี · AI answers are preliminary guidance only"
   };
   var ZH = {
@@ -193,6 +194,7 @@
     contact_mail: "邮箱",
     foot_manual: "使用手册(PDF)",
     foot_privacy: "VisionAssist 隐私政策",
+    foot_privacy_web: "隐私政策",
     copy: "© {Y} ซอฟแวร์ดีดี · AI回答仅供初步参考"
   };
   var KEY = "tc-lang";

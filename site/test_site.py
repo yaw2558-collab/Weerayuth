@@ -126,3 +126,13 @@ def test_visionassist_delete_page():
   assert "mailto:yaw2558@gmail.com" in html
   xml = (SITE_INDEX.parent / "sitemap.xml").read_text(encoding="utf-8")
   assert "visionassist-delete.html</loc>" in xml
+
+
+def test_homepage_links_web_privacy():
+  html = SITE_INDEX.read_text(encoding="utf-8")
+  assert 'href="https://gateway-1008099094873.asia-southeast1.run.app/privacy"' in html
+  assert 'data-i18n="foot_privacy_web"' in html
+  assert ">นโยบายความเป็นส่วนตัว</a>" in html  # TH default
+  js = (SITE_INDEX.parent / "script.js").read_text(encoding="utf-8")
+  assert 'foot_privacy_web: "Privacy Policy"' in js
+  assert 'foot_privacy_web: "隐私政策"' in js
