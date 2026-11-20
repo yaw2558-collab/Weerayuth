@@ -10,3 +10,7 @@ clips/published/*.*
 # desktop installers: build outputs (built by GitHub Actions)
 desktop/*/dist/
 desktop/*/build/
+
+# local-only image tool output
+generated_images/
+
