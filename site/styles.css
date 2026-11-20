@@ -41,6 +41,8 @@ a{color:var(--brand)}
 .mail-addr{margin:14px 0 0;font-size:14.5px}
 .cta-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:20px}
 .center-row{justify-content:center}
+.notice{background:#fef3c7;border-bottom:1px solid #f59e0b;color:#78350f;font-size:14px;margin:0;padding:10px 22px;text-align:center}
+.notice a{color:#92400e;font-weight:600}
 
 /* hero */
 .hero{background:linear-gradient(180deg,#fff 0%,var(--bg) 100%);padding:56px 0 60px;border-bottom:1px solid var(--line)}

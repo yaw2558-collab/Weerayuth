@@ -104,7 +104,8 @@
     foot_privacy: "VisionAssist Privacy Policy",
     foot_privacy_web: "Privacy Policy",
     foot_privacy_tcapp: "ThaiCustoms App Privacy Policy",
-    copy: "© {Y} ซอฟแวร์ดีดี · AI answers are preliminary guidance only"
+    copy: "© {Y} ซอฟแวร์ดีดี · AI answers are preliminary guidance only",
+    notice_unofficial: "⚠️ Built by an independent developer — ThaiCustoms is not an official app of the Thai Customs Department · Official source: <a href='https://www.customs.go.th'>www.customs.go.th</a>"
   };
   var ZH = {
     _title: "ซอฟแวร์ดีดี — 泰国海关HS顾问",
@@ -197,7 +198,8 @@
     foot_privacy: "VisionAssist 隐私政策",
     foot_privacy_web: "隐私政策",
     foot_privacy_tcapp: "ThaiCustoms 应用隐私政策",
-    copy: "© {Y} ซอฟแวร์ดีดี · AI回答仅供初步参考"
+    copy: "© {Y} ซอฟแวร์ดีดี · AI回答仅供初步参考",
+    notice_unofficial: "⚠️ 独立开发者作品——ThaiCustoms 非泰国海关官方应用 · 官方来源：<a href='https://www.customs.go.th'>www.customs.go.th</a>"
   };
   var KEY = "tc-lang";
   var YEAR = String(new Date().getFullYear());

@@ -171,3 +171,13 @@ def test_homepage_links_thaicustoms_app_privacy():
   js = (SITE_INDEX.parent / "script.js").read_text(encoding="utf-8")
   assert 'foot_privacy_tcapp: "ThaiCustoms App Privacy Policy"' in js
   assert 'foot_privacy_tcapp: "ThaiCustoms 应用隐私政策"' in js
+
+
+def test_homepage_unofficial_notice():
+  html = SITE_INDEX.read_text(encoding="utf-8")
+  assert 'data-i18n-html="notice_unofficial"' in html
+  assert "ไม่ใช่แอปทางการของกรมศุลกากร" in html  # TH default
+  assert 'href="https://www.customs.go.th"' in html  # official source
+  js = (SITE_INDEX.parent / "script.js").read_text(encoding="utf-8")
+  assert "not an official app of the Thai Customs Department" in js
+  assert "非泰国海关官方应用" in js
