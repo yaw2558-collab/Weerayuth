@@ -99,11 +99,12 @@ a{color:var(--brand)}
 .steps span{color:var(--muted);font-size:14.5px}
 
 /* downloads */
-.dls{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+.dls{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:18px}
 .dl{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:24px;display:flex;flex-direction:column;gap:14px}
 .dl h3{font-size:19px;margin-bottom:6px}
 .dl p{font-size:14.5px;color:var(--muted);margin:0}
 .dl .btn{align-self:flex-start}
+.dl .beta-note{font-size:13px;color:var(--muted)}
 
 /* faq */
 details{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin-bottom:10px}
